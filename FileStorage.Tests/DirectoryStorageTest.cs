@@ -126,7 +126,7 @@ namespace FileStorage.Tests
             using (var target = new DirectoryStorage(GetTestDirectory(), config.MockObject))
             {
 
-                Assert.AreEqual(null, target.SavedRange());
+                Assert.AreEqual(null, target.SavedRange()); 
                 Assert.AreEqual(0, target.GetFilesInfos().Count);
 
                 bool bl = false;
