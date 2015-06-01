@@ -1,6 +1,7 @@
 ﻿using Storage.Interfaces;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -39,6 +40,21 @@ namespace FileStorage
     {
         public DirectoryStorage(string directory,IDirectoryStorageConfiguration configuration)
         {
+            if (configuration == null) throw new ArgumentNullException("configuration");
+            if (string.IsNullOrWhiteSpace(directory)) throw new ArgumentNullException("directory");
+            if(Directory.Exists(directory)==false)throw new DirectoryNotFoundException(directory);
+            if (configuration.MinimumRecordDataSizeInBytes < 1)
+            {
+                throw new InvalidDataException(string.Format("configuration.MinimumRecordDataSizeInBytes[{0}] < 1", configuration.MinimumRecordDataSizeInBytes));
+            }
+            if (configuration.MinimumRecordDataSizeInBytes*1014 > configuration.MaximumRecordDataSizeInKilobytes)
+            {
+                throw new InvalidDataException(String.Format("configuration.MinimumRecordDataSizeInBytes*1014 [{0}]> configuration.MaximumRecordDataSizeInKilobytes[{1}]", configuration.MinimumRecordDataSizeInBytes * 1014 , configuration.MaximumRecordDataSizeInKilobytes));
+            }
+            if (configuration.MaximumRecordDataSizeInKilobytes*5 > configuration.MaximumMegabytesInFile*1024)//проверяем что можно в файл записать хотя бы 5 максимальных записей
+            {
+                throw new InvalidDataException(string.Format("configuration.MaximumRecordDataSizeInKilobytes[{0}]*5 > configuration.MaximumMegabytesInFile[{1}]*1024", configuration.MaximumRecordDataSizeInKilobytes ,configuration.MaximumMegabytesInFile ));
+            }
 
         }
 

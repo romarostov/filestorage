@@ -26,6 +26,7 @@ namespace FileStorage.Tests
             {
                 Directory.Delete(test_dir, true);
             }
+            Directory.CreateDirectory(test_dir);
         }
 
         [ExpectedException(typeof(ArgumentNullException))]
@@ -35,6 +36,15 @@ namespace FileStorage.Tests
             MockFactory mockFactory=new MockFactory();
             Mock<IDirectoryStorageConfiguration> config = mockFactory.CreateMock<IDirectoryStorageConfiguration>();
             new DirectoryStorage("", config.MockObject);
+
+        }
+
+        [ExpectedException(typeof(ArgumentNullException))]
+        [TestMethod]
+        public void EmptyConfiguration()
+        {
+            
+            new DirectoryStorage(GetTestDirectory(), null);
 
         }
 
