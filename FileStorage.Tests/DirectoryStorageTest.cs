@@ -1,4 +1,6 @@
-﻿using System; 
+﻿using System;
+using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
@@ -172,10 +174,196 @@ namespace FileStorage.Tests
                 time_serivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t1);
                 target.SaveData(10,4,new byte[]{2});
 
+                mock_factory.ClearException();
+                mock_factory.VerifyAllExpectationsHaveBeenMet();
+
                 Assert.AreEqual(null, target.GetSavedRangeInUTC());
                 Assert.AreEqual(1, target.GetFilesInfos().Count);
                 var file_info = target.GetFilesInfos().Single(x => x.FileName == DirectoryStorage.GetFileNameByTime(t1));
+                Assert.AreEqual(1,file_info.CountRecords);
+                Assert.AreEqual(true,file_info.IsCurrent);
+                Assert.AreEqual(t1,file_info.SavedTimeRangeUTC.StartTime);
+                Assert.AreEqual(t1,file_info.SavedTimeRangeUTC.FinishTime);
+                Assert.AreEqual(3+1,file_info.SizeInBytes);
 
+
+                bl = false;
+                try
+                {
+                    target.GetData(t1.AddDays(-1), t1.AddDays(-1), null, null);
+                }
+                catch (InvalidDataException)
+                {
+                    bl = true;
+                }
+                Assert.IsTrue(bl);
+
+
+                bl = false;
+                try
+                {
+                    target.GetData(t1.AddDays(-1), t1.AddDays(-2), null, null);
+                }
+                catch (InvalidDataException)
+                {
+                    bl = true;
+                }
+                Assert.IsTrue(bl);
+
+
+                Assert.AreEqual(0,target.GetData(t1.AddDays(-1), t1.AddDays(-2), null, null).Count);
+
+                {
+                    var resuls = target.GetData(t1.AddDays(-1), t1, null, null);
+                    Assert.AreEqual(1,resuls.Count);
+                    var item = resuls[0];
+                    Assert.AreEqual(t1,item.Time);
+                    Assert.AreEqual(10,item.SourceId);
+                    Assert.AreEqual(4,item.DataTypeId);
+                    Assert.AreEqual(1,item.Data.Length);
+                    Assert.AreEqual(2,item.Data[0]);
+                }
+
+
+                {
+                    var resuls = target.GetData(t1.AddDays(-1), t1.AddDays(1), null, null);
+                    Assert.AreEqual(1, resuls.Count);
+                    var item = resuls[0];
+                    Assert.AreEqual(t1, item.Time);
+                    Assert.AreEqual(10, item.SourceId);
+                    Assert.AreEqual(4, item.DataTypeId);
+                    Assert.AreEqual(1, item.Data.Length);
+                    Assert.AreEqual(2, item.Data[0]);
+                }
+
+
+                {
+                    var resuls = target.GetData(t1.AddDays(-1), t1.AddDays(1), new List<int>(){10}, null);
+                    Assert.AreEqual(1, resuls.Count);
+                    var item = resuls[0];
+                    Assert.AreEqual(t1, item.Time);
+                    Assert.AreEqual(10, item.SourceId);
+                    Assert.AreEqual(4, item.DataTypeId);
+                    Assert.AreEqual(1, item.Data.Length);
+                    Assert.AreEqual(2, item.Data[0]);
+
+                    Assert.AreEqual(0,target.GetData(t1.AddDays(-1), t1.AddDays(1), new List<int>() { 11 }, null).Count);
+                }
+
+
+                {
+                    var resuls = target.GetData(t1.AddDays(-1), t1.AddDays(1), new List<int>() { 11,10 }, null);
+                    Assert.AreEqual(1, resuls.Count);
+                    var item = resuls[0];
+                    Assert.AreEqual(t1, item.Time);
+                    Assert.AreEqual(10, item.SourceId);
+                    Assert.AreEqual(4, item.DataTypeId);
+                    Assert.AreEqual(1, item.Data.Length);
+                    Assert.AreEqual(2, item.Data[0]);
+                }
+
+
+                
+                {
+                    var resuls = target.GetData(t1.AddDays(-1), t1.AddDays(1), new List<int>() { 11, 10 }, new List<byte>(){4});
+                    Assert.AreEqual(1, resuls.Count);
+                    var item = resuls[0];
+                    Assert.AreEqual(t1, item.Time);
+                    Assert.AreEqual(10, item.SourceId);
+                    Assert.AreEqual(4, item.DataTypeId);
+                    Assert.AreEqual(1, item.Data.Length);
+                    Assert.AreEqual(2, item.Data[0]);
+
+                    Assert.AreEqual(0,target.GetData(t1.AddDays(-1), t1.AddDays(1), new List<int>() { 11, 10 }, new List<byte>(){5}).Count);
+                    
+                }
+
+                {
+                    var resuls = target.GetData(t1.AddDays(-1), t1.AddDays(1), null, new List<byte>() { 4 });
+                    Assert.AreEqual(1, resuls.Count);
+                    var item = resuls[0];
+                    Assert.AreEqual(t1, item.Time);
+                    Assert.AreEqual(10, item.SourceId);
+                    Assert.AreEqual(4, item.DataTypeId);
+                    Assert.AreEqual(1, item.Data.Length);
+                    Assert.AreEqual(2, item.Data[0]);
+
+                    Assert.AreEqual(0, target.GetData(t1.AddDays(-1), t1.AddDays(1), null, new List<byte>() { 5 }).Count);
+
+                }
+
+                {
+                    var resuls = target.GetData(t1.AddDays(-1), t1.AddDays(1), null, new List<byte>() { 2,4,5 });
+                    Assert.AreEqual(1, resuls.Count);
+                    var item = resuls[0];
+                    Assert.AreEqual(t1, item.Time);
+                    Assert.AreEqual(10, item.SourceId);
+                    Assert.AreEqual(4, item.DataTypeId);
+                    Assert.AreEqual(1, item.Data.Length);
+                    Assert.AreEqual(2, item.Data[0]);
+
+                    Assert.AreEqual(0, target.GetData(t1.AddDays(-1), t1.AddDays(1), null, new List<byte>() { 5 }).Count);
+
+                }
+
+
+
+                DateTime t2 = t1.AddMilliseconds(1);
+
+                time_serivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t2);
+                target.SaveData(10, 6, new byte[] { 2,10,11,12 });
+
+                mock_factory.ClearException();
+                mock_factory.VerifyAllExpectationsHaveBeenMet();
+
+
+                long old_file_size = file_info.SizeInBytes;
+
+                Assert.AreEqual(t1, target.GetSavedRangeInUTC().StartTime);
+                Assert.AreEqual(t2, target.GetSavedRangeInUTC().FinishTime);
+                Assert.AreEqual(1, target.GetFilesInfos().Count);
+                file_info = target.GetFilesInfos().Single(x => x.FileName == DirectoryStorage.GetFileNameByTime(t1));
+                Assert.AreEqual(2, file_info.CountRecords);
+                Assert.AreEqual(true, file_info.IsCurrent);
+                Assert.AreEqual(t1, file_info.SavedTimeRangeUTC.StartTime);
+                Assert.AreEqual(t2, file_info.SavedTimeRangeUTC.FinishTime);
+                Assert.AreEqual(old_file_size+8+3 + 1, file_info.SizeInBytes);
+
+
+                {
+                    var resuls = target.GetData(t1.AddDays(-1), t1, null, null);
+                    Assert.AreEqual(1, resuls.Count);
+                    var item = resuls[0];
+                    Assert.AreEqual(t1, item.Time);
+                    Assert.AreEqual(10, item.SourceId);
+                    Assert.AreEqual(4, item.DataTypeId);
+                    Assert.AreEqual(1, item.Data.Length);
+                    Assert.AreEqual(2, item.Data[0]);
+                }
+
+                {
+                    var resuls = target.GetData(t1.AddDays(-1), t2, null, null);
+                    Assert.AreEqual(2, resuls.Count);
+                    var item = resuls[0];
+                    Assert.AreEqual(t1, item.Time);
+                    Assert.AreEqual(10, item.SourceId);
+                    Assert.AreEqual(4, item.DataTypeId);
+                    Assert.AreEqual(1, item.Data.Length);
+                    Assert.AreEqual(2, item.Data[0]);
+
+                    item = resuls[1];
+                    Assert.AreEqual(t2, item.Time);
+                    Assert.AreEqual(10, item.SourceId);
+                    Assert.AreEqual(6, item.DataTypeId);
+                    Assert.AreEqual(4, item.Data.Length);
+                    Assert.AreEqual(2, item.Data[0]);
+                    Assert.AreEqual(10, item.Data[1]);
+                    Assert.AreEqual(11, item.Data[2]);
+                    Assert.AreEqual(12, item.Data[3]);
+                }
+
+
+                
             }
 
         }
