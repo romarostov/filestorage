@@ -32,13 +32,31 @@ namespace FileStorage
 
         public bool IsCurrent { get; set; }
 
-        public DateTimeRange SavedTimeRange { get; set; }
+        public DateTimeRange SavedTimeRangeUTC { get; set; }
 
+    }
+
+    public interface ITimeSerivice
+    {
+        DateTime UTCNow { get; }
+    }
+
+    class TimeSerivice : ITimeSerivice
+    {
+        public DateTime GetUTCTime()
+        {
+            return DateTime.UtcNow;
+        }
     }
 
     public class DirectoryStorage : IDataItemStore, IDisposable
     {
-        public DirectoryStorage(string directory,IDirectoryStorageConfiguration configuration)
+        public DirectoryStorage(string directory, IDirectoryStorageConfiguration configuration):this(directory,configuration,new TimeSerivice())
+        {
+            
+        }
+
+        public DirectoryStorage(string directory,IDirectoryStorageConfiguration configuration, ITimeSerivice time_serivice)
         {
             if (configuration == null) throw new ArgumentNullException("configuration");
             if (string.IsNullOrWhiteSpace(directory)) throw new ArgumentNullException("directory");
@@ -63,7 +81,7 @@ namespace FileStorage
             throw new NotImplementedException();
         }
 
-        public DateTimeRange SavedRange()
+        public DateTimeRange GetSavedRangeInUTC()
         {
             throw new NotImplementedException();
         }
@@ -79,6 +97,11 @@ namespace FileStorage
         }
 
         public void Dispose()
+        {
+            throw new NotImplementedException();
+        }
+
+        public static string GetFileNameByTime(DateTime createtion_time)
         {
             throw new NotImplementedException();
         }

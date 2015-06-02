@@ -1,5 +1,6 @@
 ﻿using System; 
 using System.IO;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -128,15 +129,16 @@ namespace FileStorage.Tests
         [TestMethod]
         public void SimpleProcessWithMinimumConfigurationAndOneRecord()
         {
-            MockFactory mockFactory = new MockFactory();
-            Mock<IDirectoryStorageConfiguration> config = mockFactory.CreateMock<IDirectoryStorageConfiguration>();
+            MockFactory mock_factory = new MockFactory();
+            Mock<IDirectoryStorageConfiguration> config = mock_factory.CreateMock<IDirectoryStorageConfiguration>();
             config.Expects.AtLeastOne.GetProperty(x => x.MinimumRecordDataSizeInBytes).WillReturn(1);
             config.Expects.AtLeastOne.GetProperty(x => x.MaximumRecordDataSizeInKilobytes).WillReturn(1);
             config.Expects.AtLeastOne.GetProperty(x => x.MaximumMegabytesInFile).WillReturn(1);
-            using (var target = new DirectoryStorage(GetTestDirectory(), config.MockObject))
+            Mock<ITimeSerivice> time_serivice = mock_factory.CreateMock<ITimeSerivice>();
+            using (var target = new DirectoryStorage(GetTestDirectory(), config.MockObject,time_serivice.MockObject))
             {
 
-                Assert.AreEqual(null, target.SavedRange()); 
+                Assert.AreEqual(null, target.GetSavedRangeInUTC()); 
                 Assert.AreEqual(0, target.GetFilesInfos().Count);
 
                 bool bl = false;
@@ -150,14 +152,39 @@ namespace FileStorage.Tests
                 }
                 Assert.IsTrue(bl);
 
+                bl = false;
+                try
+                {
+                    target.SaveData(1, 2, null);
+                }
+                catch (ArgumentNullException)
+                {
+                    bl = true;
+                }
+                Assert.IsTrue(bl);
 
-                Assert.AreEqual(null, target.SavedRange());
+                Assert.AreEqual(null, target.GetSavedRangeInUTC());
                 Assert.AreEqual(0, target.GetFilesInfos().Count);
 
 
+                DateTime t1=DateTime.Now.AddDays(-1);
+
+                time_serivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t1);
+                target.SaveData(10,4,new byte[]{2});
+
+                Assert.AreEqual(null, target.GetSavedRangeInUTC());
+                Assert.AreEqual(1, target.GetFilesInfos().Count);
+                var file_info = target.GetFilesInfos().Single(x => x.FileName == DirectoryStorage.GetFileNameByTime(t1));
 
             }
 
+        }
+
+
+        [TestMethod]
+        public void GetFileNameByTime()
+        {
+            Assert.AreEqual("20101110090807DB.dat", DirectoryStorage.GetFileNameByTime(new DateTime(2010,11,10,9,8,7)));
         }
 
 
