@@ -211,12 +211,36 @@ namespace FileStorage
 
     public class FileWritingIndex : IFileWritingIndex
     {
+        
+        public List<long> GetRecordPositions(DateTime start_range, DateTime finish_range,Dictionary<int, int> source_ids, Dictionary<byte, byte> data_type_ids)
+        {
+            throw new NotImplementedException();
+        }
+
         public void AddDataToIndex(long currentFilePosition, DateTime dateTime, ushort sourceId, byte dataTypeId, int dataLength)
         {
             throw new NotImplementedException();
         }
 
         public void FlushIndexToFile(string data_base_file)
+        {
+            throw new NotImplementedException();
+        }
+    }
+
+    public class FileStorageReader : IDisposable
+    {
+        public FileStorageReader(string file_name)
+        {
+            
+        }
+
+        public void ScanFileAndFillIndex(IFileWritingIndex index)
+        {
+            
+        }
+
+        public void Dispose()
         {
             throw new NotImplementedException();
         }
