@@ -14,15 +14,14 @@ namespace FileStorage.Tests
     public class DirectoryStorageTest
     {
 
-        string GetTestDirectory()
+        public static string  GetTestDirectory()
         {
             var ams_dir = new FileInfo(Assembly.GetExecutingAssembly().Location).Directory;
             string test_dir = Path.Combine(ams_dir.FullName, "TestDir");
             return test_dir;
         }
 
-        [TestInitialize]
-        public void TestInit()
+        public static void ClearTestDirectory()
         {
             string test_dir = GetTestDirectory();
             if (Directory.Exists(test_dir))
@@ -30,6 +29,12 @@ namespace FileStorage.Tests
                 Directory.Delete(test_dir, true);
             }
             Directory.CreateDirectory(test_dir);
+        }
+
+        [TestInitialize]
+        public void TestInit()
+        {
+            ClearTestDirectory();
         }
 
         [ExpectedException(typeof(ArgumentNullException))]

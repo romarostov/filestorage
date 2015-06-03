@@ -55,6 +55,7 @@
     </Otherwise>
   </Choose>
   <ItemGroup>
+    <Compile Include="CurrentFileStorageTest.cs" />
     <Compile Include="NMock3\NMockTest.cs" />
     <Compile Include="DirectoryStorageTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

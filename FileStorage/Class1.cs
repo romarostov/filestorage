@@ -1,6 +1,7 @@
 ﻿using Storage.Interfaces;
 using System;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -64,6 +65,7 @@ namespace FileStorage
         private readonly int _maximumBytesInFile;
         private readonly object _writeSyncObject = new object();
         CurrentFileStorage _currentFileStorage;
+        private IFileWritingIndex _current_file_index;
 
 
         public DirectoryStorage(string directory, IDirectoryStorageConfiguration configuration)
@@ -126,10 +128,10 @@ namespace FileStorage
 
             lock (_writeSyncObject)
             {
-
                 if (_currentFileStorage == null)
                 {
-                    _currentFileStorage = new CurrentFileStorage(_directory, _timeSerivice, _maximumBytesInFile);
+                    _current_file_index=new FileWritingIndex();
+                    _currentFileStorage = new CurrentFileStorage(_directory, _timeSerivice, _maximumBytesInFile, _current_file_index);
                 }
 
                 bool? is_write=null;
@@ -146,16 +148,20 @@ namespace FileStorage
                 //False - файл переполнен, записываем в новый
                 if (is_write.HasValue==false || is_write.Value == false)
                 {
-
+                    var old_index = _current_file_index;
                     var oldFileStorage = _currentFileStorage;
+                    
                     _currentFileStorage = null;
+                    _current_file_index = null;
+
+                    
 
                     Task.Factory.StartNew(() =>
                     {
                         try
                         {
                             //записываем индекс в файл
-                            oldFileStorage.CreateFileIndexAndGetInfo();
+                            old_index.FlushIndexToFile(oldFileStorage.FileName);
                         }
                         catch (Exception)
                         {
@@ -163,10 +169,12 @@ namespace FileStorage
                         }
                     });
 
-                    var newCurrentFile = new CurrentFileStorage(_directory, _timeSerivice, _maximumBytesInFile);
+                    IFileWritingIndex new_index=new FileWritingIndex();
+                    var newCurrentFile = new CurrentFileStorage(_directory, _timeSerivice, _maximumBytesInFile,new_index);
                     newCurrentFile.WriteRecord(source_id, data_type_id, data);
 
                     _currentFileStorage = newCurrentFile;
+                    _current_file_index = new_index;
                 }
             }
         }
@@ -204,7 +212,9 @@ namespace FileStorage
     public interface IFileWritingIndex
     {
         
-        void AddDataToIndex(long currentFilePosition, DateTime dateTime, ushort sourceId, byte dataTypeId, int dataLength);
+
+
+        void AddDataToIndex(long currentFilePosition, DateTime dateTime, ushort sourceId, byte dataTypeId);
 
         void FlushIndexToFile(string data_base_file);
     }
@@ -217,7 +227,7 @@ namespace FileStorage
             throw new NotImplementedException();
         }
 
-        public void AddDataToIndex(long currentFilePosition, DateTime dateTime, ushort sourceId, byte dataTypeId, int dataLength)
+        public void AddDataToIndex(long currentFilePosition, DateTime dateTime, ushort sourceId, byte dataTypeId)
         {
             throw new NotImplementedException();
         }
@@ -228,12 +238,63 @@ namespace FileStorage
         }
     }
 
-    public class FileStorageReader : IDisposable
+    public interface ISearchProcessData
+    {
+        DateTime StartSearchRange { get; }
+        DateTime FinishSearchRange { get; }
+        IDictionary<int, int> SearchSourceIds { get; }
+        IDictionary<int, int> TypeDataIds { get; }
+        void Add(DateTime time, ushort sourceId, byte dataTypeId, byte[] data);
+    }
+
+    public class SearchProcessData : ISearchProcessData
+    {
+        public DateTime StartSearchRange { get;private set; }
+
+        public DateTime FinishSearchRange { get; private set; }
+
+        public List<DbDataRecord> Results { get; private set; }
+
+        public IDictionary<int, int> SearchSourceIds { get; private set; }
+
+        public IDictionary<int, int> TypeDataIds { get; private set; }
+
+        public void Add(DateTime time, ushort sourceId, byte dataTypeId, byte[] data)
+        {
+            throw new NotImplementedException();
+        }
+
+        public SearchProcessData(DateTime start_range, DateTime finish_range, List<int> source_ids, List<byte> data_type_ids,long maximum_result_size)
+        {
+            Results=new List<DbDataRecord>();
+        }
+        
+    }
+
+    public class FileStorageReader :IDisposable
     {
         public FileStorageReader(string file_name)
         {
             
         }
+
+
+        public void OpenStream()
+        {
+            
+        }
+
+
+        public DataItem GetDbDataRecord(long record_potion)
+        {
+            throw new NotImplementedException();
+        }
+
+        public void CloseStream()
+        {
+
+        }
+
 
         public void ScanFileAndFillIndex(IFileWritingIndex index)
         {
@@ -246,39 +307,44 @@ namespace FileStorage
         }
     }
 
+    public class FileStorageBase 
+    {
+        protected void SearchData(ISearchProcessData searchProcessData, List<long> recordPositions)
+        {
+
+        }
+
+    }
+    
+
     public class CurrentFileStorage : IDisposable
     {
         private readonly ITimeSerivice _timeSerivice;
-        private readonly int _maximumFileSize;
+        private readonly int _maximumFileSizeInBytes;
         private readonly IFileWritingIndex _fileIndex;
         private readonly FileStream _fileStream;
-        private readonly string _fullFile;
+        
 
-        public CurrentFileStorage(string directory, ITimeSerivice timeSerivice, int maximumFileSize):this(directory,timeSerivice,maximumFileSize,new FileWritingIndex())
-        {
-            
-        }
+        public string FileName { get; private set; }
+        public long FileSize { get { return _fileStream.Length; } }
 
-        public CurrentFileStorage(string directory, ITimeSerivice timeSerivice, int maximumFileSize,IFileWritingIndex fileIndex)
+        public CurrentFileStorage(string directory, ITimeSerivice timeSerivice, int maximumFileSizeInBytes,IFileWritingIndex fileIndex)
         {
             _timeSerivice = timeSerivice;
-            _maximumFileSize = maximumFileSize;
+            _maximumFileSizeInBytes = maximumFileSizeInBytes;
             _fileIndex = fileIndex;
             
-            _fullFile = Path.Combine(directory, DirectoryStorage.GetFileNameByTime(timeSerivice.UTCNow));
+            FileName = Path.Combine(directory, DirectoryStorage.GetFileNameByTime(timeSerivice.UTCNow));
 
-            _fileStream = File.Create(_fullFile);
+            _fileStream = File.Create(FileName);
 
             //записываем префикс идентификатор базы данных
-            byte[] file_prefix = DirectoryStorage.GetFileDBPrefix();
-            _fileStream.Write(file_prefix, 0, file_prefix.Length);
+            byte[] filePrefix = DirectoryStorage.GetFileDBPrefix();
+            _fileStream.Write(filePrefix, 0, filePrefix.Length);
         }
-
-
 
         public void Dispose()
         {
-            
             _fileStream.Close();
         }
 
@@ -287,9 +353,14 @@ namespace FileStorage
             Dispose();
         }
 
+        public DataItem GetDbDataRecord(long record_potion)
+        {
+            throw new NotImplementedException();
+        }
+
         public bool WriteRecord(ushort sourceId, byte dataTypeId, byte[] data)
         {
-            if (_fileStream.Length + data.Length > _maximumFileSize)
+            if (_fileStream.Length + data.Length > _maximumFileSizeInBytes)
             {
                 return false;
             }
@@ -312,13 +383,9 @@ namespace FileStorage
             
             _fileStream.Write(data,0,data.Length); //записываем данные
 
-            _fileIndex.AddDataToIndex(currentFilePosition, dateTime, sourceId, dataTypeId, data.Length);
+            _fileIndex.AddDataToIndex(currentFilePosition, dateTime, sourceId, dataTypeId);
             return true;
         }
 
-        public void CreateFileIndexAndGetInfo()
-        {
-            _fileIndex.FlushIndexToFile(_fullFile);
-        }
     }
 }
