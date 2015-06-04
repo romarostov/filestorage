@@ -271,61 +271,160 @@ namespace FileStorage
         
     }
 
-    public class FileStorageReader :IDisposable
+    public abstract class FileStorageReaderBase :IDisposable
     {
-        public FileStorageReader(string file_name)
+        protected long _startingDataFilePosition;
+        protected FileStream _fileStream;
+
+
+        public string FileName { get; protected set; }
+
+        public virtual void OpenStream()
         {
-            
+            if (_fileStream == null)
+            {
+                _fileStream = File.OpenRead(FileName);
+            }
         }
 
-
-        public void OpenStream()
+        public virtual void CloseStream()
         {
-            
+            if (_fileStream != null)
+            {
+                _fileStream.Close();
+                _fileStream.Dispose();
+                _fileStream = null;
+            }
         }
-
 
         public DataItem GetDbDataRecord(long record_potion)
         {
-            throw new NotImplementedException();
+            if (record_potion < 0)
+            {
+                throw new InvalidDataException(String.Format("record_potion[{0}] < 0", record_potion));
+            }
+            if (record_potion >= _fileStream.Length)
+            {
+                throw new InvalidDataException(String.Format("record_potion[{0}] >=_fileStream.Length[{1}]", record_potion, _fileStream.Length));
+            }
+
+            _fileStream.Position = record_potion;
+            if (_fileStream.ReadByte() != Byte.MaxValue)
+            {
+                throw new Exception(String.Format("In position [{0}] not started record", record_potion));
+            }
+            DataItem ret = new DataItem();
+            byte[] buffer = new byte[8];
+
+            _fileStream.Write(buffer, 0, 4);
+            int size = BitConverter.ToInt32(buffer, 0);//размер пакета
+
+            _fileStream.Write(buffer, 0, 8); //считываем дату записи
+            long date_time_binary = BitConverter.ToInt64(buffer, 0);
+            ret.Time = DateTime.FromBinary(date_time_binary);
+
+            _fileStream.Write(buffer, 0, 2); //считываем идентификатор источника
+            ret.SourceId = BitConverter.ToUInt16(buffer, 0);
+
+            _fileStream.Write(buffer, 0, 1);
+            ret.DataTypeId = buffer[0];
+
+            ret.Data = new byte[size - 1 - 2 - 8 - 4];
+            _fileStream.Write(ret.Data, 0, ret.Data.Length);
+            return ret;
         }
-
-        public void CloseStream()
-        {
-
-        }
-
 
         public void ScanFileAndFillIndex(IFileWritingIndex index)
         {
-            
+            if (index == null) throw new ArgumentNullException(nameof(index));
+
+            OpenStream();
+            try
+            {
+                _fileStream.Position = _startingDataFilePosition;
+                byte[] buffer = new byte[8];
+                while (_fileStream.Position<_fileStream.Length)
+                {
+                    long current_file_position=_fileStream.Position;
+                    if (_fileStream.ReadByte() != Byte.MaxValue)
+                    {
+                        throw new InvalidDataException("Error file format");
+                    }
+                    
+                    _fileStream.Write(buffer, 0, 4);
+                    int size = BitConverter.ToInt32(buffer, 0);//размер пакета
+
+                    _fileStream.Write(buffer, 0, 8); //считываем дату записи
+                    long date_time_binary = BitConverter.ToInt64(buffer, 0);
+                    var time = DateTime.FromBinary(date_time_binary);
+
+                    _fileStream.Write(buffer, 0, 2); //считываем идентификатор источника
+                    var sourceId = BitConverter.ToUInt16(buffer, 0);
+
+                    _fileStream.Write(buffer, 0, 1);
+                    var dataTypeId = buffer[0];
+                    
+                    index.AddDataToIndex(current_file_position,time,sourceId,dataTypeId);
+
+                    int data_size = size - 1 - 2 - 8 - 4;
+                    _fileStream.Seek(data_size,SeekOrigin.Current);
+                }
+            }
+            finally
+            {
+                CloseStream();
+            }
         }
 
         public void Dispose()
         {
-            throw new NotImplementedException();
+            
+            CloseStream();
         }
     }
 
-    public class FileStorageBase 
+    public class FileStorageReader : FileStorageReaderBase
     {
-        protected void SearchData(ISearchProcessData searchProcessData, List<long> recordPositions)
+
+        public FileStorageReader(string file_name)
         {
+            FileName = file_name;
+            if (string.IsNullOrWhiteSpace(file_name)) throw new ArgumentNullException(nameof(file_name));
+            if (File.Exists(file_name)==false)
+            {
+                throw new FileNotFoundException(file_name);
+            }
+
+            using (FileStream file=File.OpenRead(file_name))
+            {
+                byte[] file_prefix = DirectoryStorage.GetFileDBPrefix();
+
+                //byte[] d=new byte[8];
+                //int readed = file.Read(d, 0, 8);
+
+                for (int i = 0; i < file_prefix.Length; i++)
+                {
+                    int current_byte = file.ReadByte();
+                    if (file_prefix[i] != current_byte)
+                    {
+                        throw new Exception("Not current database file");
+                    }
+                }
+                _startingDataFilePosition = file.Position;
+            }
 
         }
 
     }
     
 
-    public class CurrentFileStorage : IDisposable
+    public class CurrentFileStorage : FileStorageReaderBase
     {
         private readonly ITimeSerivice _timeSerivice;
         private readonly int _maximumFileSizeInBytes;
         private readonly IFileWritingIndex _fileIndex;
-        private readonly FileStream _fileStream;
         
-
-        public string FileName { get; private set; }
+        
         public long FileSize { get { return _fileStream.Length; } }
 
         public CurrentFileStorage(string directory, ITimeSerivice timeSerivice, int maximumFileSizeInBytes,IFileWritingIndex fileIndex)
@@ -341,21 +440,8 @@ namespace FileStorage
             //записываем префикс идентификатор базы данных
             byte[] filePrefix = DirectoryStorage.GetFileDBPrefix();
             _fileStream.Write(filePrefix, 0, filePrefix.Length);
-        }
-
-        public void Dispose()
-        {
-            _fileStream.Close();
-        }
-
-        ~CurrentFileStorage()
-        {
-            Dispose();
-        }
-
-        public DataItem GetDbDataRecord(long record_potion)
-        {
-            throw new NotImplementedException();
+            _startingDataFilePosition = _fileStream.Position;
+            _fileStream.Flush();
         }
 
         public bool WriteRecord(ushort sourceId, byte dataTypeId, byte[] data)
@@ -365,10 +451,13 @@ namespace FileStorage
                 return false;
             }
 
-            long currentFilePosition = _fileStream.Position;
+            long current_file_position = _fileStream.Position;
 
-            int record_size = 4/*размер записи*/+ 8 /*время записи*/ + 4 /*идентификатор источнка*/+ 1 /*тип данных*/+ data.Length;
+            int record_size =  4/*размер записи*/+ 8 /*время записи*/ + 4 /*идентификатор источнка*/+ 1 /*тип данных*/+ data.Length;
             
+            
+            _fileStream.WriteByte(Byte.MaxValue);
+
             byte[] buffer = BitConverter.GetBytes(record_size);
             _fileStream.Write(buffer, 0, buffer.Length);//записываем размер пакета
 
@@ -382,10 +471,13 @@ namespace FileStorage
             _fileStream.WriteByte(dataTypeId); //записываем тип данных
             
             _fileStream.Write(data,0,data.Length); //записываем данные
-
-            _fileIndex.AddDataToIndex(currentFilePosition, dateTime, sourceId, dataTypeId);
+            _fileStream.Flush();
+            _fileIndex.AddDataToIndex(current_file_position, dateTime, sourceId, dataTypeId);
             return true;
         }
 
+        public override void CloseStream()
+        {
+        }
     }
 }

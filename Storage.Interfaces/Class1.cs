@@ -28,7 +28,7 @@ namespace Storage.Interfaces
     {
         public DateTime Time { get; set; }
 
-        public int SourceId { get; set; }
+        public ushort SourceId { get; set; }
 
         public byte DataTypeId { get; set; }
 

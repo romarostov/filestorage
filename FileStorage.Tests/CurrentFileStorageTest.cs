@@ -25,7 +25,7 @@ namespace FileStorage.Tests
 
         public void AddDataToIndex(long currentFilePosition, DateTime dateTime, ushort sourceId, byte dataTypeId)
         {
-            throw new NotImplementedException();
+            Records.Add(new MockIndexRecord() {currentFilePosition = currentFilePosition,dataTypeId = dataTypeId,dateTime = dateTime,sourceId = sourceId});
         }
 
         public void FlushIndexToFile(string data_base_file)
@@ -33,6 +33,7 @@ namespace FileStorage.Tests
             throw new NotSupportedException();
         }
     }
+
     [TestClass]
     public class CurrentFileStorageTest
     {
@@ -52,20 +53,20 @@ namespace FileStorage.Tests
 
 
             Mock<IFileWritingIndex> index = mockFactory.CreateMock<IFileWritingIndex>();
-            timeSerivice.Expects.One.Method(x => x.UTCNow).WillReturn(t1);
+            timeSerivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t1);
             using (CurrentFileStorage target = new CurrentFileStorage(GetTestDirectory(), timeSerivice.MockObject, 100,
                     index.MockObject))
             {
                 mockFactory.VerifyAllExpectationsHaveBeenMet();
                 mockFactory.ClearException();
 
-                Assert.AreEqual(DirectoryStorage.GetFileNameByTime(t1), target.FileName);
+                Assert.IsTrue(target.FileName.Contains(DirectoryStorage.GetFileNameByTime(t1)));
 
             }
             bool bl = false;
             try
             {
-                var target = new FileStorageReader(DirectoryStorage.GetFileNameByTime(t1.AddMilliseconds(1)));
+                var target = new FileStorageReader(GetFileFromTime(t1.AddMilliseconds(1)));
             }
             catch (FileNotFoundException)
             {
@@ -73,7 +74,7 @@ namespace FileStorage.Tests
             }
             Assert.IsTrue(bl);
 
-            using (var stream = File.Create(DirectoryStorage.GetFileNameByTime(t1.AddMilliseconds(1))))
+            using (var stream = File.Create(GetFileFromTime(t1.AddMilliseconds(1))))
             {
                 byte[] data = DirectoryStorage.GetFileDBPrefix();
                 data[2] = 0;
@@ -83,7 +84,7 @@ namespace FileStorage.Tests
             bl = false;
             try
             {
-                var target = new FileStorageReader(DirectoryStorage.GetFileNameByTime(t1.AddMilliseconds(1)));
+                var target = new FileStorageReader(GetFileFromTime(t1.AddMilliseconds(1)));
             }
             catch (InvalidDataException)
             {
@@ -92,7 +93,7 @@ namespace FileStorage.Tests
             Assert.IsTrue(bl);
 
             {
-                var target = new FileStorageReader(DirectoryStorage.GetFileNameByTime(t1));
+                var target = new FileStorageReader(GetFileFromTime(t1));
                 Mock<IFileWritingIndex> new_index = mockFactory.CreateMock<IFileWritingIndex>();
                 target.ScanFileAndFillIndex(new_index.MockObject);
                 mockFactory.VerifyAllExpectationsHaveBeenMet();
@@ -111,15 +112,15 @@ namespace FileStorage.Tests
 
             long record_position = 0;
             MockFileWritingIndex index = new MockFileWritingIndex();
-            timeSerivice.Expects.One.Method(x => x.UTCNow).WillReturn(t1);
+            timeSerivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t1);
             using (CurrentFileStorage target = new CurrentFileStorage(GetTestDirectory(), timeSerivice.MockObject, 100, index))
             {
                 mockFactory.VerifyAllExpectationsHaveBeenMet();
                 mockFactory.ClearException();
 
-                Assert.AreEqual(DirectoryStorage.GetFileNameByTime(t1), target.FileName);
+                Assert.IsTrue(target.FileName.Contains(DirectoryStorage.GetFileNameByTime(t1)));
 
-                timeSerivice.Expects.One.Method(x => x.UTCNow).WillReturn(t2);
+                timeSerivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t2);
                 target.WriteRecord(10, 20, new byte[] { 30 });
 
                 Assert.AreEqual(1, index.Records.Count);
@@ -166,9 +167,9 @@ namespace FileStorage.Tests
                 Assert.IsTrue(bl);
             }
 
-            long file_size = new FileInfo(DirectoryStorage.GetFileNameByTime(t1)).Length;
+            long file_size = new FileInfo(GetFileFromTime(t1)).Length;
 
-            using (var target = new FileStorageReader(DirectoryStorage.GetFileNameByTime(t1)))
+            using (var target = new FileStorageReader(GetFileFromTime(t1)))
             {
 
                 index = new MockFileWritingIndex();
@@ -267,7 +268,7 @@ namespace FileStorage.Tests
             }
 
 
-            using (var target = new FileStorageReader(DirectoryStorage.GetFileNameByTime(t1)))
+            using (var target = new FileStorageReader(GetFileFromTime(t1)))
             {
                 bool bl = false;
                 try
@@ -323,7 +324,7 @@ namespace FileStorage.Tests
             long first_record_position = 0;
             long second_record_position = 0;
             MockFileWritingIndex index = new MockFileWritingIndex();
-            timeSerivice.Expects.One.Method(x => x.UTCNow).WillReturn(t1);
+            timeSerivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t1);
             using (
                 CurrentFileStorage target = new CurrentFileStorage(GetTestDirectory(), timeSerivice.MockObject, 100,
                     index))
@@ -331,9 +332,9 @@ namespace FileStorage.Tests
                 mockFactory.VerifyAllExpectationsHaveBeenMet();
                 mockFactory.ClearException();
 
-                Assert.AreEqual(DirectoryStorage.GetFileNameByTime(t1), target.FileName);
+                Assert.IsTrue(target.FileName.Contains(DirectoryStorage.GetFileNameByTime(t1)));
 
-                timeSerivice.Expects.One.Method(x => x.UTCNow).WillReturn(t2);
+                timeSerivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t2);
                 target.WriteRecord(10, 20, new byte[] { 30 });
 
                 Assert.AreEqual(1, index.Records.Count);
@@ -354,7 +355,7 @@ namespace FileStorage.Tests
                 Assert.AreEqual(1, record.Data.Length);
                 Assert.AreEqual(30, record.Data[0]);
 
-                timeSerivice.Expects.One.Method(x => x.UTCNow).WillReturn(t3);
+                timeSerivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t3);
                 target.WriteRecord(101, 201, new byte[] { 31, 41, 51 });
 
                 Assert.AreEqual(2, index.Records.Count);
@@ -390,7 +391,7 @@ namespace FileStorage.Tests
 
             }
 
-            using (var target = new FileStorageReader(DirectoryStorage.GetFileNameByTime(t1)))
+            using (var target = new FileStorageReader(GetFileFromTime(t1)))
             {
 
                 index = new MockFileWritingIndex();
@@ -471,19 +472,19 @@ namespace FileStorage.Tests
             List<long> positions =new List<long>();  
 
             MockFileWritingIndex index = new MockFileWritingIndex();
-            timeSerivice.Expects.One.Method(x => x.UTCNow).WillReturn(t1);
+            timeSerivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t1);
             using (CurrentFileStorage target = new CurrentFileStorage(GetTestDirectory(), timeSerivice.MockObject, 100, index))
             {
                 mockFactory.VerifyAllExpectationsHaveBeenMet();
                 mockFactory.ClearException();
 
-                Assert.AreEqual(DirectoryStorage.GetFileNameByTime(t1), target.FileName);
+                Assert.IsTrue(target.FileName.Contains(DirectoryStorage.GetFileNameByTime(t1)));
 
                 for (ushort i = 1; i < 20; i++)
                 {
                     string item_data = Guid.NewGuid().ToString();
                     record_data.Add(item_data);
-                    timeSerivice.Expects.One.Method(x => x.UTCNow).WillReturn(t1.AddSeconds(i));
+                    timeSerivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t1.AddSeconds(i));
                     Assert.IsTrue(target.WriteRecord(i, (byte)(i + 1), Encoding.UTF8.GetBytes(item_data)));
                     mockFactory.VerifyAllExpectationsHaveBeenMet();
                     mockFactory.ClearException();
@@ -510,7 +511,7 @@ namespace FileStorage.Tests
 
             }
 
-            using (var target = new FileStorageReader(DirectoryStorage.GetFileNameByTime(t1)))
+            using (var target = new FileStorageReader(GetFileFromTime(t1)))
             {
 
                 index = new MockFileWritingIndex();
@@ -532,7 +533,7 @@ namespace FileStorage.Tests
                 }
             }
 
-            using (var target = new FileStorageReader(DirectoryStorage.GetFileNameByTime(t1)))
+            using (var target = new FileStorageReader(GetFileFromTime(t1)))
             {
                 target.OpenStream();
                 Assert.AreEqual(20, index.Records.Count);
@@ -551,6 +552,10 @@ namespace FileStorage.Tests
         }
 
 
+        private string GetFileFromTime(DateTime time)
+        {
+            return Path.Combine(GetTestDirectory(), DirectoryStorage.GetFileNameByTime(time));
+        }
 
         private string GetTestDirectory()
         {
