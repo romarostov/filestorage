@@ -19,7 +19,7 @@ namespace FileStorage
 
         int MaximumRecordDataSizeInKilobytes { get; }
 
-    } 
+    }
 
 
     public class FileStorageInfo
@@ -77,19 +77,19 @@ namespace FileStorage
         public FileStorageFactory(ITimeSerivice time_service, IDirectoryStorageConfiguration configuration)
         {
             _timeService = time_service;
-            _maximumFileSizeInBytes = configuration.MaximumMegabytesInFile*1024*1024;
+            _maximumFileSizeInBytes = configuration.MaximumMegabytesInFile * 1024 * 1024;
         }
 
         public IFileStorageReader GetFileStorageReader(string file_name)
         {
-            IFileStorageReaderAndWriter file_storage=new FileStorageReaderAndWriter(file_name);
-            return new FileStorageWithIndex(false,file_storage);
+            IFileStorageReaderAndWriter file_storage = new FileStorageReaderAndWriter(file_name);
+            return new FileStorageWithIndex(false, file_storage);
         }
 
         public IFileStorageWriter CreaNewFileStorage(string directory)
         {
-            IFileStorageReaderAndWriter file_storage = new FileStorageReaderAndWriter(directory,_timeService,_maximumFileSizeInBytes);
-            return new FileStorageWithIndex(true,file_storage); 
+            IFileStorageReaderAndWriter file_storage = new FileStorageReaderAndWriter(directory, _timeService, _maximumFileSizeInBytes);
+            return new FileStorageWithIndex(true, file_storage);
         }
 
     }
@@ -104,14 +104,16 @@ namespace FileStorage
     }
 
 
-    public interface IFileStorageWriter: IFileStorageReader
+    public interface IFileStorageWriter : IFileStorageReader
     {
         bool WriteRecord(ushort sourceId, byte dataTypeId, byte[] data);
 
         void StopWritingDataToFile();
+
+        string FileName { get; }
     }
 
-    public class FileStorageWithIndex : IFileWritingIndex,  IFileStorageWriter
+    public class FileStorageWithIndex : IFileWritingIndex, IFileStorageWriter
     {
         private readonly bool _isNewFile;
         private readonly IFileStorageReaderAndWriter _fileStorageReaderAndWriter;
@@ -142,35 +144,34 @@ namespace FileStorage
             throw new NotImplementedException();
         }
 
+        public string FileName { get; set; }
+
         public DateTime StartRange { get; private set; }
 
         public DateTime FinishRange { get; private set; }
-
-        public List<long> GetRecordPositions(ISearchProcessData request)
+        
+        public FileStorageInfo GetWorkInfo()
         {
             throw new NotImplementedException();
         }
 
         public void ProcessSearchRequest(ISearchProcessData request)
         {
-            List<long> positions = GetRecordPositions(request);
-            if (positions != null)
+            try
             {
-                try
-                {
-                    if(_isNewFile==false) _fileStorageReaderAndWriter.OpenStream();
+                if (_isNewFile == false) _fileStorageReaderAndWriter.OpenStream();
 
-                    foreach (long position in positions)
-                    {
-                        request.Add(_fileStorageReaderAndWriter.GetDbDataRecord(position));
-                    }
-                }
-                finally
+                //foreach (long position in positions)
                 {
-                    if (_isNewFile==false)
-                    {
-                        _fileStorageReaderAndWriter.CloseStream();
-                    }
+                    long position = 10;
+                    request.Add(_fileStorageReaderAndWriter.GetDbDataRecord(position));
+                }
+            }
+            finally
+            {
+                if (_isNewFile == false)
+                {
+                    _fileStorageReaderAndWriter.CloseStream();
                 }
             }
         }
@@ -181,10 +182,6 @@ namespace FileStorage
             throw new NotImplementedException();
         }
 
-        public FileStorageInfo GetWorkInfo()
-        {
-            throw new NotImplementedException();
-        }
     }
 
 

@@ -16,7 +16,6 @@ namespace Storage.Interfaces
 
     public interface IDataItemStore
     {
-        DateTimeRange GetSavedRangeInUTC();
 
         List<DataItem> GetData(DateTime start_range, DateTime finish_range, List<int> source_ids, List<byte> data_type_ids);
 

@@ -23,7 +23,7 @@ namespace FileStorage
     }
 
 
-    public class FileStorageReaderAndWriter : IFileStorageReaderAndWriter
+    public class FileStorageReaderAndWriter :DisposableObject, IFileStorageReaderAndWriter
     {
 
         private readonly ITimeSerivice _timeSerivice;
@@ -189,7 +189,7 @@ namespace FileStorage
             }
         }
 
-        public void Dispose()
+        protected override void OnDisposed()
         {
             if (_fileStream != null)
             {
@@ -198,7 +198,7 @@ namespace FileStorage
                 _fileStream = null;
             }
         }
-
+        
 
         public bool WriteRecord(ushort sourceId, byte dataTypeId, byte[] data, IFileWritingIndex index)
         {

@@ -42,7 +42,7 @@
     <Compile Include="DisposableObject.cs" />
     <Compile Include="Index.cs" />
     <Compile Include="NewFile.cs" />
-    <Compile Include="DirectoryStorage.cs" />
+    <Compile Include="DirectoryStorage1.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
