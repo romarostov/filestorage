@@ -54,7 +54,7 @@ namespace FileStorage.Tests
 
             Mock<IWritableFileStorage> index = mockFactory.CreateMock<IWritableFileStorage>();
             timeSerivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t1);
-            using (CurrentFileStorage target = new CurrentFileStorage(GetTestDirectory(), timeSerivice.MockObject, 100,
+            using (FileStorageReaderAndWriter target = new FileStorageReaderAndWriter(GetTestDirectory(), timeSerivice.MockObject, 100,
                     index.MockObject))
             {
                 mockFactory.VerifyAllExpectationsHaveBeenMet();
@@ -113,7 +113,7 @@ namespace FileStorage.Tests
             long record_position = 0;
             MockWritableFileStorage index = new MockWritableFileStorage();
             timeSerivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t1);
-            using (CurrentFileStorage target = new CurrentFileStorage(GetTestDirectory(), timeSerivice.MockObject, 100, index))
+            using (FileStorageReaderAndWriter target = new FileStorageReaderAndWriter(GetTestDirectory(), timeSerivice.MockObject, 100, index))
             {
                 mockFactory.VerifyAllExpectationsHaveBeenMet();
                 mockFactory.ClearException();
@@ -326,7 +326,7 @@ namespace FileStorage.Tests
             MockWritableFileStorage index = new MockWritableFileStorage();
             timeSerivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t1);
             using (
-                CurrentFileStorage target = new CurrentFileStorage(GetTestDirectory(), timeSerivice.MockObject, 100,
+                FileStorageReaderAndWriter target = new FileStorageReaderAndWriter(GetTestDirectory(), timeSerivice.MockObject, 100,
                     index))
             {
                 mockFactory.VerifyAllExpectationsHaveBeenMet();
@@ -477,7 +477,7 @@ namespace FileStorage.Tests
             MockWritableFileStorage index = new MockWritableFileStorage();
             timeSerivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t1);
             using (
-                CurrentFileStorage target = new CurrentFileStorage(GetTestDirectory(), timeSerivice.MockObject, 100,
+                FileStorageReaderAndWriter target = new FileStorageReaderAndWriter(GetTestDirectory(), timeSerivice.MockObject, 100,
                     index))
             {
                 mockFactory.VerifyAllExpectationsHaveBeenMet();
@@ -698,7 +698,7 @@ namespace FileStorage.Tests
 
             //56 байт на один пакет
 
-            using (CurrentFileStorage target = new CurrentFileStorage(GetTestDirectory(), timeSerivice.MockObject, 52*20-8, index))
+            using (FileStorageReaderAndWriter target = new FileStorageReaderAndWriter(GetTestDirectory(), timeSerivice.MockObject, 52*20-8, index))
             {
                 mockFactory.VerifyAllExpectationsHaveBeenMet();
                 mockFactory.ClearException();
