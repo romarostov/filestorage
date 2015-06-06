@@ -2,7 +2,7 @@ using System;
 
 namespace FileStorage
 {
-    class TimeSerivice : ITimeSerivice
+    public class TimeSerivice : ITimeSerivice
     {
         public DateTime UTCNow
         {

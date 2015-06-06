@@ -182,6 +182,8 @@ namespace FileStorage.Tests
                 Assert.AreEqual(0, target.GetData(time1.AddHours(-1), time1.AddSeconds(-1), null, null).Count);
                 
                 {
+
+
                     fileReader1.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
                     Assert.AreEqual(0,target.GetData(time1.AddHours(-1), time1, null, null).Count);
                 }
@@ -280,6 +282,7 @@ namespace FileStorage.Tests
 
 
             {
+                fileReader1.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
                 file_reader2.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
                 Assert.AreEqual(0, target.GetData(time2.AddSeconds(-1), time2, null, null).Count);
             }
@@ -288,6 +291,7 @@ namespace FileStorage.Tests
 
             
             {
+                fileReader1.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
                 file_reader2.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
                 Assert.AreEqual(0, target.GetData(time2, time2, null, null).Count);
             }

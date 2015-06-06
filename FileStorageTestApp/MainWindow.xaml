@@ -1,0 +1,10 @@
+﻿<Window x:Class="FileStorageTestApp.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="MainWindow" Height="350" Width="525">
+    <Grid>
+        <TextBox HorizontalAlignment="Left" Name="DatabasePath" Height="30" Margin="32,10,0,0" TextWrapping="Wrap" Text="D:\TestDB\" VerticalAlignment="Top" Width="293"/>
+        <Button Content="Инициализировать базу данных" Name="InitDataBaseName" HorizontalAlignment="Left" Margin="32,45,0,0" VerticalAlignment="Top" Width="220"/>
+
+    </Grid>
+</Window>

@@ -72,9 +72,9 @@ namespace FileStorage
 
         private void _addDataToIndex(long recordFilePosition, DateTime dateTime, ushort sourceId, byte dataTypeId)
         {
-            if (_finishRange >= dateTime)
+            if (_finishRange > dateTime)
             {
-                throw new Exception(String.Format("Time problem _finishRange[{0}] >= dateTime[{1}]", _finishRange, dateTime));
+                throw new Exception(String.Format("Time problem _finishRange[{0}] > dateTime[{1}]", _finishRange, dateTime));
             }
             if (_startRange == DateTime.MinValue)
             {
@@ -271,6 +271,7 @@ namespace FileStorage
 
                         foreach (var info in _records)
                         {
+                            if(IsDisposed)break;
                             if (info.DateTime > request.FinishSearchRange)
                             {
                                 break; //дальше данных в запрашиваемом диапазоне нет
@@ -318,6 +319,11 @@ namespace FileStorage
         {
             lock (_syncObject)
             {
+
+                if (_isNewFile && _records.Count>0)
+                {
+                    _saveIndexToFile();
+                }
                 _fileStorageReaderAndWriter.Dispose();
             }
         }

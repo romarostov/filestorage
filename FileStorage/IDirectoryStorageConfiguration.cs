@@ -8,22 +8,22 @@ namespace FileStorage
         /// <summary>
         /// Максимальный размер одного файла 
         /// </summary>
-        int MaximumMegabytesInFile { get; }
+        long MaximumMegabytesInFile { get; }
 
         /// <summary>
         /// Минимальный размер данных в записи
         /// </summary>
-        int MinimumRecordDataSizeInBytes { get; }
+        long MinimumRecordDataSizeInBytes { get; }
 
         /// <summary>
         /// Максимальный размер данных в записи
         /// </summary>
-        int MaximumRecordDataSizeInKilobytes { get; }
+        long MaximumRecordDataSizeInKilobytes { get; }
 
         /// <summary>
         /// Максимальный размер данных в ответе на запрос.
         /// Защита от большого запроса
         /// </summary>
-        int MaximumResultDataSizeInMegabytes { get;  }
+        long MaximumResultDataSizeInMegabytes { get;  }
     }
 }

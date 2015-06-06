@@ -15,8 +15,9 @@ namespace FileStorage
         private readonly IFileStorageFactory _fileStorageFactory;
         private readonly ITimeSerivice _timeSerivice;
 
-        private readonly int _minimumRecordDataSizeInBytes;
-        private readonly int _maximumRecordDataSizeInBytes;
+        private readonly long _minimumRecordDataSizeInBytes;
+        private readonly long _maximumRecordDataSizeInBytes;
+        private readonly long _maximumResultDataSize;
 
         private readonly object _writeSyncObject = new object();
         IFileStorageWriter _currentFileStorage;
@@ -24,8 +25,7 @@ namespace FileStorage
         public List<LoadFileInfoError> FileWithErrors { get; private set; }
 
         private readonly SortedDictionary<DateTime, IFileStorageReader> _storageItems = new SortedDictionary<DateTime, IFileStorageReader>();
-
-        private readonly long _maximumResultDataSize;
+        
         private readonly object _readIndexesSyncObject = new object();
 
 
@@ -49,9 +49,9 @@ namespace FileStorage
             {
                 throw new InvalidDataException(String.Format("configuration.MinimumRecordDataSizeInBytes [{0}]> configuration.MaximumRecordDataSizeInKilobytes*1014[{1}]", configuration.MinimumRecordDataSizeInBytes * 1014, configuration.MaximumRecordDataSizeInKilobytes));
             }
-            if (configuration.MaximumResultDataSizeInMegabytes < configuration.MinimumRecordDataSizeInBytes)
+            if (configuration.MaximumResultDataSizeInMegabytes *1024*1024 < configuration.MinimumRecordDataSizeInBytes)
             {
-                throw new InvalidDataException(String.Format("configuration.MaximumResultDataSizeInMegabytes[{0}] < configuration.MinimumRecordDataSizeInBytes[{1}}", configuration.MaximumResultDataSizeInMegabytes, configuration.MinimumRecordDataSizeInBytes));
+                throw new InvalidDataException(String.Format("configuration.MaximumResultDataSizeInMegabytes[{0}] < configuration.MinimumRecordDataSizeInBytes[{1}]", configuration.MaximumResultDataSizeInMegabytes, configuration.MinimumRecordDataSizeInBytes));
             }
 
             _minimumRecordDataSizeInBytes = configuration.MinimumRecordDataSizeInBytes;
@@ -103,16 +103,23 @@ namespace FileStorage
             }
             SearchRequestData request = new SearchRequestData(startRange, finishRange, sourceIds, dataTypeIds, _maximumResultDataSize);
 
+            List<IFileStorageReader> files=new List<IFileStorageReader>();
             lock (_readIndexesSyncObject)
             {
                 foreach (KeyValuePair<DateTime, IFileStorageReader> fileStorageIndex in _storageItems)
                 {
-                    if (fileStorageIndex.Key >= startRange)
+                    if (IsDisposed) break;
+                    if (fileStorageIndex.Key > finishRange) break;
+                    if (fileStorageIndex.Value.FinishRange >= startRange)
                     {
-                        if (fileStorageIndex.Key > finishRange) break;
-                        fileStorageIndex.Value.ProcessSearchRequest(request);
+                        files.Add(fileStorageIndex.Value);
                     }
                 }
+            }
+            for (int index = 0; index < files.Count; index++)
+            {
+                var fileStorageReader = files[index];
+                fileStorageReader.ProcessSearchRequest(request);
             }
             return request.Results;
         }

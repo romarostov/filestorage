@@ -5,7 +5,7 @@ namespace FileStorage
     public class FileStorageFactory : IFileStorageFactory
     {
         private readonly ITimeSerivice _timeService;
-        private readonly int _maximumFileSizeInBytes;
+        private readonly long _maximumFileSizeInBytes;
 
         public FileStorageFactory(ITimeSerivice timeService, IDirectoryStorageConfiguration configuration)
         {

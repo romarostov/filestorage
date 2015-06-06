@@ -695,8 +695,8 @@ namespace FileStorage.Tests
             timeSerivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t1);
 
             //56 байт на один пакет
-
-            using (FileStorageReaderAndWriter target = new FileStorageReaderAndWriter(GetTestDirectory(), timeSerivice.MockObject, 52*20-8))
+            long max_size = 52*20 - 8;
+            using (FileStorageReaderAndWriter target = new FileStorageReaderAndWriter(GetTestDirectory(), timeSerivice.MockObject, max_size))
             {
                 mockFactory.VerifyAllExpectationsHaveBeenMet();
                 mockFactory.ClearException();

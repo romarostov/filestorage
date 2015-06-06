@@ -4,65 +4,29 @@ using Storage.Interfaces;
 
 namespace FileStorage
 {
-
-    public interface IFileStorageReaderAndWriter
-    {
-        string FileName { get; }
-
-        long FileSize { get;  }
-
-        void OpenStream();
-
-        void CloseStream();
-
-        RecordDataItem GetDbDataRecord(long record_potion);
-
-        void ScanFileAndFillIndex(IFileStorageIndex index);
-
-        bool WriteRecord(ushort sourceId, byte dataTypeId, byte[] data, IFileStorageIndex index);
-
-        void Dispose();
-    }
-
-
     public class FileStorageReaderAndWriter :DisposableObject, IFileStorageReaderAndWriter
     {
 
         private readonly ITimeSerivice _timeSerivice;
-        private readonly int _maximumFileSizeInBytes;
+        private readonly long _maximumFileSizeInBytes;
+        readonly long _startingDataFilePosition;
+        FileStream _fileStream;
 
-        public long FileSize
-        {
-            get
-            {
-                if (_fileStream != null)
-                {
-                    return _fileStream.Length;
-                }
-                return new FileInfo(FileName).Length;
-            }
-        }
-
-        protected long _startingDataFilePosition;
-
-        protected FileStream _fileStream;
-
-        public string FileName { get; protected set; }
 
         /// <summary>
         /// Открываем существующий файл с данными
         /// </summary>
-        /// <param name="file_name">полный путь к файлу</param>
-        public FileStorageReaderAndWriter(string file_name)
+        /// <param name="fileName">полный путь к файлу</param>
+        public FileStorageReaderAndWriter(string fileName)
         {
-            FileName = file_name;
-            if (string.IsNullOrWhiteSpace(file_name)) throw new ArgumentNullException("file_name");
-            if (File.Exists(file_name) == false)
+            FileName = fileName;
+            if (string.IsNullOrWhiteSpace(fileName)) throw new ArgumentNullException("fileName");
+            if (File.Exists(fileName) == false)
             {
-                throw new FileNotFoundException(file_name);
+                throw new FileNotFoundException(fileName);
             }
 
-            using (FileStream file = File.OpenRead(file_name))
+            using (FileStream file = File.OpenRead(fileName))
             {
                 byte[] file_prefix = GetFileDBPrefix();
 
@@ -81,8 +45,18 @@ namespace FileStorage
             }
         }
 
-        public FileStorageReaderAndWriter(string directory, ITimeSerivice timeSerivice, int maximumFileSizeInBytes)
+        /// <summary>
+        /// Создаем новый файл
+        /// </summary>
+        /// <param name="directory">директория в котором надо добавить файл</param>
+        /// <param name="timeSerivice">сервис времени</param>
+        /// <param name="maximumFileSizeInBytes">максимальный размер файла</param>
+        public FileStorageReaderAndWriter(string directory, ITimeSerivice timeSerivice, long maximumFileSizeInBytes)
         {
+            if (maximumFileSizeInBytes < 1)
+            {
+                throw new InvalidDataException(String.Format("_maximumFileSizeInBytes[{0}] < 1", maximumFileSizeInBytes));
+            }
             _timeSerivice = timeSerivice;
             _maximumFileSizeInBytes = maximumFileSizeInBytes;
 
@@ -96,6 +70,22 @@ namespace FileStorage
             _startingDataFilePosition = _fileStream.Position;
             _fileStream.Flush();
         }
+
+        public long FileSize
+        {
+            get
+            {
+                if (_fileStream != null)
+                {
+                    return _fileStream.Length;
+                }
+                return new FileInfo(FileName).Length;
+            }
+        }
+
+
+        public string FileName { get; protected set; }
+
 
         public void OpenStream()
         {
@@ -115,28 +105,28 @@ namespace FileStorage
             }
         }
 
-        public RecordDataItem GetDbDataRecord(long record_potion)
+        public RecordDataItem GetDbDataRecord(long recordPotion)
         {
             if (_fileStream == null)
             {
                 throw new InvalidOperationException("First open stream");
             }
-            if (record_potion < 0)
+            if (recordPotion < 0)
             {
-                throw new InvalidDataException(String.Format("record_potion[{0}] < 0", record_potion));
+                throw new InvalidDataException(String.Format("record_potion[{0}] < 0", recordPotion));
             }
-            if (record_potion >= _fileStream.Length)
+            if (recordPotion >= _fileStream.Length)
             {
-                throw new InvalidDataException(String.Format("record_potion[{0}] >=_fileStream.Length[{1}]", record_potion, _fileStream.Length));
+                throw new InvalidDataException(String.Format("record_potion[{0}] >=_fileStream.Length[{1}]", recordPotion, _fileStream.Length));
             }
 
-            if (_fileStream.Position != record_potion)
+            if (_fileStream.Position != recordPotion)
             {
-                _fileStream.Position = record_potion;
+                _fileStream.Position = recordPotion;
             }
             if (_fileStream.ReadByte() != Byte.MaxValue)
             {
-                throw new InvalidDataException(String.Format("In position [{0}] not started record", record_potion));
+                throw new InvalidDataException(String.Format("In position [{0}] not started record", recordPotion));
             }
             RecordDataItem ret = new RecordDataItem();
             byte[] buffer = new byte[8];
