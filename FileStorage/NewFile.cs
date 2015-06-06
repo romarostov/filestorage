@@ -9,15 +9,17 @@ namespace FileStorage
     {
         string FileName { get; }
 
+        long FileSize { get;  }
+
         void OpenStream();
 
         void CloseStream();
 
-        DataItem GetDbDataRecord(long record_potion);
+        RecordDataItem GetDbDataRecord(long record_potion);
 
-        void ScanFileAndFillIndex(IFileWritingIndex index);
+        void ScanFileAndFillIndex(IFileStorageIndex index);
 
-        bool WriteRecord(ushort sourceId, byte dataTypeId, byte[] data, IFileWritingIndex index);
+        bool WriteRecord(ushort sourceId, byte dataTypeId, byte[] data, IFileStorageIndex index);
 
         void Dispose();
     }
@@ -29,7 +31,17 @@ namespace FileStorage
         private readonly ITimeSerivice _timeSerivice;
         private readonly int _maximumFileSizeInBytes;
 
-        public long FileSize { get { return _fileStream.Length; } }
+        public long FileSize
+        {
+            get
+            {
+                if (_fileStream != null)
+                {
+                    return _fileStream.Length;
+                }
+                return new FileInfo(FileName).Length;
+            }
+        }
 
         protected long _startingDataFilePosition;
 
@@ -103,7 +115,7 @@ namespace FileStorage
             }
         }
 
-        public DataItem GetDbDataRecord(long record_potion)
+        public RecordDataItem GetDbDataRecord(long record_potion)
         {
             if (_fileStream == null)
             {
@@ -126,7 +138,7 @@ namespace FileStorage
             {
                 throw new InvalidDataException(String.Format("In position [{0}] not started record", record_potion));
             }
-            DataItem ret = new DataItem();
+            RecordDataItem ret = new RecordDataItem();
             byte[] buffer = new byte[8];
 
             _fileStream.Read(buffer, 0, 4);
@@ -147,7 +159,7 @@ namespace FileStorage
             return ret;
         }
 
-        public void ScanFileAndFillIndex(IFileWritingIndex index)
+        public void ScanFileAndFillIndex(IFileStorageIndex index)
         {
             if (index == null) throw new ArgumentNullException("index");
 
@@ -200,7 +212,7 @@ namespace FileStorage
         }
         
 
-        public bool WriteRecord(ushort sourceId, byte dataTypeId, byte[] data, IFileWritingIndex index)
+        public bool WriteRecord(ushort sourceId, byte dataTypeId, byte[] data, IFileStorageIndex index)
         {
             if (_fileStream.Length + data.Length > _maximumFileSizeInBytes)
             {
@@ -244,7 +256,7 @@ namespace FileStorage
         /// </summary>
         public static string GetFileNameByTime(DateTime createtionTime)
         {
-            return String.Format("{0}{1:N2}{2:N2}{3:N2}{4:N2}{5:N2}{6}DB.dat",
+            return String.Format("{0}{1:D2}{2:D2}{3:D2}{4:D2}{5:D2}{6}DB.dat",
                 createtionTime.Year,
                 createtionTime.Month,
                 createtionTime.Day,

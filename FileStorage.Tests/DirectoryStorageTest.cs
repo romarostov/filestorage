@@ -7,6 +7,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using NMock;
+using Storage.Interfaces;
 
 namespace FileStorage.Tests
 {
@@ -14,29 +15,23 @@ namespace FileStorage.Tests
     public class DirectoryStorageTest
     {
 
-        public static string  GetTestDirectory()
+        public static string GetTestDirectory(string test_dir_name = "TestDir")
         {
             var ams_dir = new FileInfo(Assembly.GetExecutingAssembly().Location).Directory;
-            string test_dir = Path.Combine(ams_dir.FullName, "TestDir");
+            string test_dir = Path.Combine(ams_dir.FullName, test_dir_name);
             return test_dir;
         }
 
-        public static void ClearTestDirectory()
+        public static void ClearTestDirectory(string test_dir_name = "TestDir")
         {
-            string test_dir = GetTestDirectory();
+            string test_dir = GetTestDirectory(test_dir_name);
             if (Directory.Exists(test_dir))
             {
                 Directory.Delete(test_dir, true);
             }
             Directory.CreateDirectory(test_dir);
         }
-
-        [TestInitialize]
-        public void TestInit()
-        {
-            ClearTestDirectory();
-        }
-
+        
         [ExpectedException(typeof(ArgumentNullException))]
         [TestMethod]
         public void EmptyDirectoryName()
@@ -129,258 +124,224 @@ namespace FileStorage.Tests
             config.Expects.AtLeastOne.GetProperty(x => x.MaximumMegabytesInFile).WillReturn(0);
             new DirectoryStorage(GetTestDirectory(), config.MockObject,fileStorageFactory.MockObject);
         }
-
-
-        [ExpectedException(typeof(InvalidDataException))]
-        [TestMethod]
-        public void ConfigurationValidation5()
-        {
-            MockFactory mockFactory = new MockFactory();
-            Mock<IDirectoryStorageConfiguration> config = mockFactory.CreateMock<IDirectoryStorageConfiguration>();
-            Mock<IFileStorageFactory> fileStorageFactory = mockFactory.CreateMock<IFileStorageFactory>();
-
-            config.Expects.AtLeastOne.GetProperty(x => x.MinimumRecordDataSizeInBytes).WillReturn(1024);
-            config.Expects.AtLeastOne.GetProperty(x => x.MaximumRecordDataSizeInKilobytes).WillReturn(200);
-            config.Expects.AtLeastOne.GetProperty(x => x.MaximumMegabytesInFile).WillReturn(1);
-            new DirectoryStorage(GetTestDirectory(), config.MockObject,fileStorageFactory.MockObject);
-        }
-
+        
 
         
         [TestMethod]
-        public void SimpleProcessWithMinimumConfigurationAndOneRecord()
+        public void SimpleProcess()
         {
             MockFactory mock_factory = new MockFactory();
             Mock<IDirectoryStorageConfiguration> config = mock_factory.CreateMock<IDirectoryStorageConfiguration>();
             Mock<IFileStorageFactory> fileStorageFactory = mock_factory.CreateMock<IFileStorageFactory>();
             config.Expects.AtLeastOne.GetProperty(x => x.MinimumRecordDataSizeInBytes).WillReturn(1);
             config.Expects.AtLeastOne.GetProperty(x => x.MaximumRecordDataSizeInKilobytes).WillReturn(1);
-            config.Expects.AtLeastOne.GetProperty(x => x.MaximumMegabytesInFile).WillReturn(1);
-            Mock<ITimeSerivice> time_serivice = mock_factory.CreateMock<ITimeSerivice>();
-            using (var target = new DirectoryStorage(GetTestDirectory(), config.MockObject,fileStorageFactory.MockObject, time_serivice.MockObject))
-            {
-                Assert.AreEqual(0, target.GetFilesInfos().Count);
+            config.Expects.AtLeastOne.GetProperty(x => x.MaximumResultDataSizeInMegabytes).WillReturn(1);
 
+            //Mock<ITimeSerivice> time_serivice = mock_factory.CreateMock<ITimeSerivice>();
+
+            var directory = GetTestDirectory("DirectoryStorageSimpleProcee");
+            ClearTestDirectory("DirectoryStorageSimpleProcee");
+
+            string file1 = Path.Combine(directory, "file1.dat");
+            string file2 = Path.Combine(directory, "file2.dat");
+            using (var file = File.Create(file1))
+            {
+                
+            }
+            using (var file = File.Create(file2))
+            {
+
+            }
+
+            var fileReader1 = mock_factory.CreateMock<IFileStorageReader>();
+            fileStorageFactory.Expects.One.MethodWith(x => x.GetFileStorageReader(file1)).WillReturn(fileReader1.MockObject);
+
+            fileStorageFactory.Expects.One.MethodWith(x => x.GetFileStorageReader(file2)).Will(Throw.Exception(new Exception("Error")));
+
+            DateTime time1 = DateTime.UtcNow.AddHours(-1);
+            DateTime time2 = DateTime.UtcNow.AddSeconds(-10);
+            DateTime time3 = DateTime.UtcNow.AddSeconds(-1);
+            fileReader1.Expects.One.GetProperty(x => x.StartRange).WillReturn(time1);
+
+            DirectoryStorage target = new DirectoryStorage(directory, config.MockObject, fileStorageFactory.MockObject);
+
+                mock_factory.VerifyAllExpectationsHaveBeenMet();
+                mock_factory.ClearException();
+
+                {
+                    FileStorageInfo info1=new FileStorageInfo();
+                    fileReader1.Expects.One.MethodWith(x => x.GetWorkInfo()).WillReturn(info1);
+
+                    var infos=target.GetFilesInfos();
+                    Assert.AreEqual(1,infos.Count);
+                    Assert.AreEqual(true,infos.Contains(info1));
+                }
+                mock_factory.VerifyAllExpectationsHaveBeenMet();
+                mock_factory.ClearException();
+
+                Assert.AreEqual(0, target.GetData(time1.AddHours(-1), time1.AddSeconds(-1), null, null).Count);
+                
+                {
+                    fileReader1.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                    Assert.AreEqual(0,target.GetData(time1.AddHours(-1), time1, null, null).Count);
+                }
+                mock_factory.VerifyAllExpectationsHaveBeenMet();
+                mock_factory.ClearException();
+
+                //проверяем что при ошибки записи нового файла, не добавляли в общий список
                 bool bl = false;
                 try
                 {
-                    target.SaveData(0,2,new byte[]{20,30});
+                    var reader_temp = mock_factory.CreateMock<IFileStorageWriter>();
+                    fileStorageFactory.Expects.One.MethodWith(x => x.CreaNewFileStorage(directory))
+                        .WillReturn(reader_temp.MockObject);
+                    var bytes = new byte[] {10};
+                    reader_temp.Expects.One.MethodWith(x => x.WriteRecord(10, 20, bytes))
+                        .Will(Throw.Exception(new Exception()));
+
+                    target.SaveData(10, 20, bytes);
                 }
-                catch (InvalidDataException)
+                catch
                 {
                     bl = true;
                 }
                 Assert.IsTrue(bl);
 
-                bl = false;
-                try
-                {
-                    target.SaveData(1, 2, null);
-                }
-                catch (ArgumentNullException)
-                {
-                    bl = true;
-                }
-                Assert.IsTrue(bl);
-
-                Assert.AreEqual(0, target.GetFilesInfos().Count);
-
-
-                DateTime t1=DateTime.Now.AddDays(-1);
-
-                time_serivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t1);
-                target.SaveData(10,4,new byte[]{2});
-
+                mock_factory.VerifyAllExpectationsHaveBeenMet(true);
                 mock_factory.ClearException();
+
+                {
+                    FileStorageInfo info1 = new FileStorageInfo();
+                    fileReader1.Expects.One.MethodWith(x => x.GetWorkInfo()).WillReturn(info1);
+
+                    var infos = target.GetFilesInfos();
+                    Assert.AreEqual(1, infos.Count);
+                    Assert.AreEqual(true, infos.Contains(info1));
+                }
                 mock_factory.VerifyAllExpectationsHaveBeenMet();
-
-                Assert.AreEqual(1, target.GetFilesInfos().Count);
-                //var file_info = target.GetFilesInfos().Single(x => x.FileName == DirectoryStorage.GetFileNameByTime(t1));
-                //Assert.AreEqual(1,file_info.CountRecords);
-                //Assert.AreEqual(true,file_info.IsCurrent);
-                //Assert.AreEqual(t1,file_info.SavedTimeRangeUTC.StartTime);
-                //Assert.AreEqual(t1,file_info.SavedTimeRangeUTC.FinishTime);
-                //Assert.AreEqual(3+1,file_info.SizeInBytes);
-
-
-                bl = false;
-                try
-                {
-                    target.GetData(t1.AddDays(-1), t1.AddDays(-1), null, null);
-                }
-                catch (InvalidDataException)
-                {
-                    bl = true;
-                }
-                Assert.IsTrue(bl);
-
-
-                bl = false;
-                try
-                {
-                    target.GetData(t1.AddDays(-1), t1.AddDays(-2), null, null);
-                }
-                catch (InvalidDataException)
-                {
-                    bl = true;
-                }
-                Assert.IsTrue(bl);
-
-
-                Assert.AreEqual(0,target.GetData(t1.AddDays(-1), t1.AddDays(-2), null, null).Count);
-
-                {
-                    var resuls = target.GetData(t1.AddDays(-1), t1, null, null);
-                    Assert.AreEqual(1,resuls.Count);
-                    var item = resuls[0];
-                    Assert.AreEqual(t1,item.Time);
-                    Assert.AreEqual(10,item.SourceId);
-                    Assert.AreEqual(4,item.DataTypeId);
-                    Assert.AreEqual(1,item.Data.Length);
-                    Assert.AreEqual(2,item.Data[0]);
-                }
-
-
-                {
-                    var resuls = target.GetData(t1.AddDays(-1), t1.AddDays(1), null, null);
-                    Assert.AreEqual(1, resuls.Count);
-                    var item = resuls[0];
-                    Assert.AreEqual(t1, item.Time);
-                    Assert.AreEqual(10, item.SourceId);
-                    Assert.AreEqual(4, item.DataTypeId);
-                    Assert.AreEqual(1, item.Data.Length);
-                    Assert.AreEqual(2, item.Data[0]);
-                }
-
-
-                {
-                    var resuls = target.GetData(t1.AddDays(-1), t1.AddDays(1), new List<int>(){10}, null);
-                    Assert.AreEqual(1, resuls.Count);
-                    var item = resuls[0];
-                    Assert.AreEqual(t1, item.Time);
-                    Assert.AreEqual(10, item.SourceId);
-                    Assert.AreEqual(4, item.DataTypeId);
-                    Assert.AreEqual(1, item.Data.Length);
-                    Assert.AreEqual(2, item.Data[0]);
-
-                    Assert.AreEqual(0,target.GetData(t1.AddDays(-1), t1.AddDays(1), new List<int>() { 11 }, null).Count);
-                }
-
-
-                {
-                    var resuls = target.GetData(t1.AddDays(-1), t1.AddDays(1), new List<int>() { 11,10 }, null);
-                    Assert.AreEqual(1, resuls.Count);
-                    var item = resuls[0];
-                    Assert.AreEqual(t1, item.Time);
-                    Assert.AreEqual(10, item.SourceId);
-                    Assert.AreEqual(4, item.DataTypeId);
-                    Assert.AreEqual(1, item.Data.Length);
-                    Assert.AreEqual(2, item.Data[0]);
-                }
-
-
-                
-                {
-                    var resuls = target.GetData(t1.AddDays(-1), t1.AddDays(1), new List<int>() { 11, 10 }, new List<byte>(){4});
-                    Assert.AreEqual(1, resuls.Count);
-                    var item = resuls[0];
-                    Assert.AreEqual(t1, item.Time);
-                    Assert.AreEqual(10, item.SourceId);
-                    Assert.AreEqual(4, item.DataTypeId);
-                    Assert.AreEqual(1, item.Data.Length);
-                    Assert.AreEqual(2, item.Data[0]);
-
-                    Assert.AreEqual(0,target.GetData(t1.AddDays(-1), t1.AddDays(1), new List<int>() { 11, 10 }, new List<byte>(){5}).Count);
-                    
-                }
-
-                {
-                    var resuls = target.GetData(t1.AddDays(-1), t1.AddDays(1), null, new List<byte>() { 4 });
-                    Assert.AreEqual(1, resuls.Count);
-                    var item = resuls[0];
-                    Assert.AreEqual(t1, item.Time);
-                    Assert.AreEqual(10, item.SourceId);
-                    Assert.AreEqual(4, item.DataTypeId);
-                    Assert.AreEqual(1, item.Data.Length);
-                    Assert.AreEqual(2, item.Data[0]);
-
-                    Assert.AreEqual(0, target.GetData(t1.AddDays(-1), t1.AddDays(1), null, new List<byte>() { 5 }).Count);
-
-                }
-
-                {
-                    var resuls = target.GetData(t1.AddDays(-1), t1.AddDays(1), null, new List<byte>() { 2,4,5 });
-                    Assert.AreEqual(1, resuls.Count);
-                    var item = resuls[0];
-                    Assert.AreEqual(t1, item.Time);
-                    Assert.AreEqual(10, item.SourceId);
-                    Assert.AreEqual(4, item.DataTypeId);
-                    Assert.AreEqual(1, item.Data.Length);
-                    Assert.AreEqual(2, item.Data[0]);
-
-                    Assert.AreEqual(0, target.GetData(t1.AddDays(-1), t1.AddDays(1), null, new List<byte>() { 5 }).Count);
-
-                }
-
-
-
-                DateTime t2 = t1.AddMilliseconds(1);
-
-                time_serivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t2);
-                target.SaveData(10, 6, new byte[] { 2,10,11,12 });
-
                 mock_factory.ClearException();
-                mock_factory.VerifyAllExpectationsHaveBeenMet();
 
+                var file_reader2 = mock_factory.CreateMock<IFileStorageWriter>();
 
-                //long old_file_size = file_info.SizeInBytes;
+            {
+                fileStorageFactory.Expects.One.MethodWith(x => x.CreaNewFileStorage(directory))
+                    .WillReturn(file_reader2.MockObject);
+                var bytes = new byte[] {10};
+                file_reader2.Expects.One.GetProperty(x => x.StartRange).WillReturn(time2);
+                file_reader2.Expects.One.MethodWith(x => x.WriteRecord(10, 20, bytes)).WillReturn(true);
 
-                //Assert.AreEqual(t1, target.GetSavedRangeInUTC().StartTime);
-                //Assert.AreEqual(t2, target.GetSavedRangeInUTC().FinishTime);
-                //Assert.AreEqual(1, target.GetFilesInfos().Count);
-                //file_info = target.GetFilesInfos().Single(x => x.FileName == DirectoryStorage.GetFileNameByTime(t1));
-                //Assert.AreEqual(2, file_info.CountRecords);
-                //Assert.AreEqual(true, file_info.IsCurrent);
-                //Assert.AreEqual(t1, file_info.SavedTimeRangeUTC.StartTime);
-                //Assert.AreEqual(t2, file_info.SavedTimeRangeUTC.FinishTime);
-                //Assert.AreEqual(old_file_size+8+3 + 1, file_info.SizeInBytes);
-
-
-                {
-                    var resuls = target.GetData(t1.AddDays(-1), t1, null, null);
-                    Assert.AreEqual(1, resuls.Count);
-                    var item = resuls[0];
-                    Assert.AreEqual(t1, item.Time);
-                    Assert.AreEqual(10, item.SourceId);
-                    Assert.AreEqual(4, item.DataTypeId);
-                    Assert.AreEqual(1, item.Data.Length);
-                    Assert.AreEqual(2, item.Data[0]);
-                }
-
-                {
-                    var resuls = target.GetData(t1.AddDays(-1), t2, null, null);
-                    Assert.AreEqual(2, resuls.Count);
-                    var item = resuls[0];
-                    Assert.AreEqual(t1, item.Time);
-                    Assert.AreEqual(10, item.SourceId);
-                    Assert.AreEqual(4, item.DataTypeId);
-                    Assert.AreEqual(1, item.Data.Length);
-                    Assert.AreEqual(2, item.Data[0]);
-
-                    item = resuls[1];
-                    Assert.AreEqual(t2, item.Time);
-                    Assert.AreEqual(10, item.SourceId);
-                    Assert.AreEqual(6, item.DataTypeId);
-                    Assert.AreEqual(4, item.Data.Length);
-                    Assert.AreEqual(2, item.Data[0]);
-                    Assert.AreEqual(10, item.Data[1]);
-                    Assert.AreEqual(11, item.Data[2]);
-                    Assert.AreEqual(12, item.Data[3]);
-                }
-
-
-                
+                target.SaveData(10, 20, bytes);
             }
+
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
+
+            //проверяем что он добавился в общий список
+            {
+                FileStorageInfo info1 = new FileStorageInfo();
+                fileReader1.Expects.One.MethodWith(x => x.GetWorkInfo()).WillReturn(info1);
+
+                FileStorageInfo info2 = new FileStorageInfo();
+                file_reader2.Expects.One.MethodWith(x => x.GetWorkInfo()).WillReturn(info2);
+
+                var infos = target.GetFilesInfos();
+                Assert.AreEqual(2, infos.Count);
+                Assert.AreEqual(true, infos.Contains(info1));
+                Assert.AreEqual(true, infos.Contains(info2));
+            }
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
+
+            {
+                var bytes = new byte[] { 10 };
+                file_reader2.Expects.One.MethodWith(x => x.WriteRecord(10, 20, bytes)).WillReturn(true);
+
+                target.SaveData(10, 20, bytes);
+            }
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
+
+            Assert.AreEqual(0, target.GetData(time1.AddHours(-1), time1.AddSeconds(-1), null, null).Count);
+
+            {
+                fileReader1.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                Assert.AreEqual(0, target.GetData(time1.AddHours(-1), time1, null, null).Count);
+            }
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
+
+            {
+                fileReader1.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                file_reader2.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                Assert.AreEqual(0, target.GetData(time1.AddHours(-1), time2, null, null).Count);
+            }
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
+
+
+            {
+                file_reader2.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                Assert.AreEqual(0, target.GetData(time2.AddSeconds(-1), time2, null, null).Count);
+            }
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
+
+            
+            {
+                file_reader2.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                Assert.AreEqual(0, target.GetData(time2, time2, null, null).Count);
+            }
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
+
+            {
+                
+                Assert.AreEqual(0, target.GetData(time2.AddSeconds(1), time2.AddHours(1), null, null).Count);
+            }
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
+
+            var file_reader3 = mock_factory.CreateMock<IFileStorageWriter>();//проверяем переполнения файла
+            {
+                
+                fileStorageFactory.Expects.One.MethodWith(x => x.CreaNewFileStorage(directory))
+                    .WillReturn(file_reader3.MockObject);
+                var bytes = new byte[] { 10 };
+                file_reader3.Expects.One.GetProperty(x => x.StartRange).WillReturn(time3);
+                file_reader2.Expects.One.MethodWith(x => x.WriteRecord(10, 20, bytes)).WillReturn(false);
+                file_reader2.Expects.One.MethodWith(x => x.StopWritingDataToFile());
+                file_reader3.Expects.One.MethodWith(x => x.WriteRecord(10, 20, bytes)).WillReturn(true);
+
+                target.SaveData(10, 20, bytes);
+            }
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
+
+            //проверяем что он добавился в общий список
+            {
+                FileStorageInfo info1 = new FileStorageInfo();
+                fileReader1.Expects.One.MethodWith(x => x.GetWorkInfo()).WillReturn(info1);
+
+                FileStorageInfo info2 = new FileStorageInfo();
+                file_reader2.Expects.One.MethodWith(x => x.GetWorkInfo()).WillReturn(info2);
+
+                FileStorageInfo info3 = new FileStorageInfo();
+                file_reader3.Expects.One.MethodWith(x => x.GetWorkInfo()).WillReturn(info3);
+
+                var infos = target.GetFilesInfos();
+                Assert.AreEqual(3, infos.Count);
+                Assert.AreEqual(true, infos.Contains(info1));
+                Assert.AreEqual(true, infos.Contains(info2));
+                Assert.AreEqual(true, infos.Contains(info3));
+            }
+
+
+            fileReader1.Expects.One.MethodWith(x => x.Dispose());
+            target.Dispose();
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
+
+
 
         }
 
@@ -388,7 +349,7 @@ namespace FileStorage.Tests
         [TestMethod]
         public void GetFileNameByTime()
         {
-            Assert.AreEqual("20101110090807DB.dat", FileStorageReaderAndWriter.GetFileNameByTime(new DateTime(2010, 11, 10, 9, 8, 7)));
+            Assert.AreEqual("201011100908070DB.dat", FileStorageReaderAndWriter.GetFileNameByTime(new DateTime(2010, 11, 10, 9, 8, 7)));
         }
 
 

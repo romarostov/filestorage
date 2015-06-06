@@ -1,21 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Threading.Tasks;
+using NLog;
 using Storage.Interfaces;
 
 namespace FileStorage
 {
-
-    public class LoadFileInfoError
-    {
-        public string FileName { get; set; }
-        public string Error { get; set; }
-    }
-
-
-
-    public class DirectoryStorage : IDataItemStore, IDisposable
+    /// <summary>
+    /// Общая логика работы с хранилищем
+    /// </summary>
+    public class DirectoryStorage : DisposableObject, IDataItemStore
     {
         private readonly string _directory;
         private readonly IFileStorageFactory _fileStorageFactory;
@@ -27,15 +21,12 @@ namespace FileStorage
         private readonly object _writeSyncObject = new object();
         IFileStorageWriter _currentFileStorage;
 
-
         public List<LoadFileInfoError> FileWithErrors { get; private set; }
 
-        private SortedDictionary<DateTime, IFileStorageReader> _storageItems = new SortedDictionary<DateTime, IFileStorageReader>();
+        private readonly SortedDictionary<DateTime, IFileStorageReader> _storageItems = new SortedDictionary<DateTime, IFileStorageReader>();
 
-        private long _mazimumResultDataSize; 
+        private readonly long _maximumResultDataSize;
         private readonly object _readIndexesSyncObject = new object();
-        
-
 
 
         public DirectoryStorage(string directory, IDirectoryStorageConfiguration configuration, IFileStorageFactory fileStorageFactory)
@@ -54,12 +45,18 @@ namespace FileStorage
             {
                 throw new InvalidDataException(string.Format("configuration.MinimumRecordDataSizeInBytes[{0}] < 1", configuration.MinimumRecordDataSizeInBytes));
             }
-            if (configuration.MinimumRecordDataSizeInBytes * 1014 > configuration.MaximumRecordDataSizeInKilobytes)
+            if (configuration.MinimumRecordDataSizeInBytes > configuration.MaximumRecordDataSizeInKilobytes * 1014)
             {
-                throw new InvalidDataException(String.Format("configuration.MinimumRecordDataSizeInBytes*1014 [{0}]> configuration.MaximumRecordDataSizeInKilobytes[{1}]", configuration.MinimumRecordDataSizeInBytes * 1014, configuration.MaximumRecordDataSizeInKilobytes));
+                throw new InvalidDataException(String.Format("configuration.MinimumRecordDataSizeInBytes [{0}]> configuration.MaximumRecordDataSizeInKilobytes*1014[{1}]", configuration.MinimumRecordDataSizeInBytes * 1014, configuration.MaximumRecordDataSizeInKilobytes));
             }
+            if (configuration.MaximumResultDataSizeInMegabytes < configuration.MinimumRecordDataSizeInBytes)
+            {
+                throw new InvalidDataException(String.Format("configuration.MaximumResultDataSizeInMegabytes[{0}] < configuration.MinimumRecordDataSizeInBytes[{1}}", configuration.MaximumResultDataSizeInMegabytes, configuration.MinimumRecordDataSizeInBytes));
+            }
+
             _minimumRecordDataSizeInBytes = configuration.MinimumRecordDataSizeInBytes;
             _maximumRecordDataSizeInBytes = configuration.MaximumRecordDataSizeInKilobytes * 1024;
+            _maximumResultDataSize = configuration.MaximumResultDataSizeInMegabytes * 1024 * 1024;
 
             _directory = directory;
             _fileStorageFactory = fileStorageFactory;
@@ -97,22 +94,22 @@ namespace FileStorage
             }
             return ret;
         }
-        
-        public List<DataItem> GetData(DateTime start_range, DateTime finish_range, List<int> source_ids, List<byte> data_type_ids)
+
+        public List<RecordDataItem> GetData(DateTime startRange, DateTime finishRange, List<ushort> sourceIds, List<byte> dataTypeIds)
         {
-            if (_timeSerivice.UTCNow <= start_range)
+            if (_timeSerivice.UTCNow <= startRange)
             {
-                throw new InvalidDataException(String.Format("_timeSerivice.UTCNow[{0}] <= start_range[{1}]", _timeSerivice.UTCNow, start_range));
+                throw new InvalidDataException(String.Format("_timeSerivice.UTCNow[{0}] <= start_range[{1}]", _timeSerivice.UTCNow, startRange));
             }
-            SearchProcessData request = new SearchProcessData(start_range, finish_range, source_ids, data_type_ids, _mazimumResultDataSize);
+            SearchRequestData request = new SearchRequestData(startRange, finishRange, sourceIds, dataTypeIds, _maximumResultDataSize);
 
             lock (_readIndexesSyncObject)
             {
                 foreach (KeyValuePair<DateTime, IFileStorageReader> fileStorageIndex in _storageItems)
                 {
-                    if (fileStorageIndex.Key >= start_range)
+                    if (fileStorageIndex.Key >= startRange)
                     {
-                        if (fileStorageIndex.Key < finish_range) break;
+                        if (fileStorageIndex.Key > finishRange) break;
                         fileStorageIndex.Value.ProcessSearchRequest(request);
                     }
                 }
@@ -120,7 +117,7 @@ namespace FileStorage
             return request.Results;
         }
 
-        public void SaveData(UInt16 source_id, byte data_type_id, byte[] data)
+        public void SaveData(UInt16 sourceId, byte dataTypeId, byte[] data)
         {
             if (data == null) throw new ArgumentNullException("data");
             if (data.Length < _minimumRecordDataSizeInBytes)
@@ -131,6 +128,7 @@ namespace FileStorage
             {
                 throw new InvalidDataException(string.Format("data.Length[{0}] > MaximumRecordDataSizeInBytes[{1}]", data.Length, _maximumRecordDataSizeInBytes));
             }
+            if (IsDisposed) throw new InvalidOperationException();
 
             lock (_writeSyncObject)
             {
@@ -144,11 +142,14 @@ namespace FileStorage
 
                 try
                 {
-                    is_write = writer.WriteRecord(source_id, data_type_id, data);
+                    is_write = writer.WriteRecord(sourceId, dataTypeId, data);
                 }
-                catch (Exception)
+                catch (Exception exception)
                 {
                     //ошибка записи данных в файл, чтобы избежать ошибки в следствии частичной записи, закрываем этот файл и начинаем новый
+                    LogManager.GetCurrentClassLogger().ErrorException("WriteRecord", exception);
+                    _stopCurrentFile();
+                    throw;
                 }
 
                 if (is_write == true)
@@ -162,72 +163,61 @@ namespace FileStorage
                         }
                     }
                 }
-                else //False - файл переполнен, записываем в новый
+                else if (is_write == false)//False - файл переполнен, записываем в новый
                 {
-                    
-                    try
-                    {
-                        if (_currentFileStorage != null)
-                        {
-                            _currentFileStorage.StopWritingDataToFile();
-                        }
-                    }
-                    catch (Exception exception)
-                    {
-                        if (_currentFileStorage != null)
-                            FileWithErrors.Add(new LoadFileInfoError() { FileName = _currentFileStorage.FileName, Error = exception.Message });
-                    }
-
-                    _currentFileStorage = null;
+                    _stopCurrentFile();
 
                     //создаем новый файл и записываем туда данные
 
                     var newCurentFile = _fileStorageFactory.CreaNewFileStorage(_directory);
-                    newCurentFile.WriteRecord(source_id, data_type_id, data);
+                    newCurentFile.WriteRecord(sourceId, dataTypeId, data);
 
                     _currentFileStorage = newCurentFile;
                     lock (_readIndexesSyncObject)
                     {
                         _storageItems.Add(_currentFileStorage.StartRange, _currentFileStorage);
                     }
+
                 }
             }
         }
 
-        public void Dispose()
+        private void _stopCurrentFile()
         {
-            lock (_writeSyncObject)
+            try
             {
                 if (_currentFileStorage != null)
                 {
                     _currentFileStorage.StopWritingDataToFile();
                 }
+            }
+            catch (Exception exception)
+            {
+                if (_currentFileStorage != null)
+                    FileWithErrors.Add(new LoadFileInfoError()
+                    {
+                        FileName = _currentFileStorage.FileName,
+                        Error = exception.Message
+                    });
+            }
+            finally
+            {
                 _currentFileStorage = null;
             }
         }
 
-        ///// <summary>
-        ///// Возвращает имя файла с данными по дате создания
-        ///// </summary>
-        //public static string GetFileNameByTime(DateTime createtionTime)
-        //{
-        //    return String.Format("{0}{1:N2}{2:N2}{3:N2}{4:N2}{5:N2}{6}DB.dat",
-        //        createtionTime.Year,
-        //        createtionTime.Month,
-        //        createtionTime.Day,
-        //        createtionTime.Hour,
-        //        createtionTime.Minute,
-        //        createtionTime.Second, createtionTime.Millisecond);
-        //}
+        protected override void OnDisposed()
+        {
+            lock (_readIndexesSyncObject)
+            {
+                foreach (IFileStorageReader item in _storageItems.Values)
+                {
+                    item.Dispose();
+                }
+                _storageItems.Clear();
+            }
 
-        ///// <summary>
-        ///// "Уникальный" префик к файлам базы данных.
-        ///// 
-        ///// </summary>
-        ///// <returns></returns>
-        //public static byte[] GetFileDBPrefix()
-        //{
-        //    return new byte[] { 20, 30, 2, 1, 4, 6, 3, 1 };
-        //}
+        }
+
     }
 }

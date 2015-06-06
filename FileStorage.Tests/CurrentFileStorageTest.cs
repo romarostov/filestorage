@@ -19,13 +19,13 @@ namespace FileStorage.Tests
         public byte dataTypeId;
     }
 
-    class MockWritableFileStorage : IFileWritingIndex
+    class MockWritableFileStorage : IFileStorageIndex
     {
         public List<MockIndexRecord> Records = new List<MockIndexRecord>();
 
-        public void AddDataToIndex(long currentFilePosition, DateTime dateTime, ushort sourceId, byte dataTypeId)
+        public void AddDataToIndex(long recordFilePosition, DateTime dateTime, ushort sourceId, byte dataTypeId)
         {
-            Records.Add(new MockIndexRecord() {currentFilePosition = currentFilePosition,dataTypeId = dataTypeId,dateTime = dateTime,sourceId = sourceId});
+            Records.Add(new MockIndexRecord() {currentFilePosition = recordFilePosition,dataTypeId = dataTypeId,dateTime = dateTime,sourceId = sourceId});
         }
 
         public void FlushIndexToFile(string data_base_file)
@@ -52,7 +52,7 @@ namespace FileStorage.Tests
             DateTime t1 = DateTime.Now.AddDays(-1);
 
 
-            Mock<IFileWritingIndex> index = mockFactory.CreateMock<IFileWritingIndex>();
+            Mock<IFileStorageIndex> index = mockFactory.CreateMock<IFileStorageIndex>();
             timeSerivice.Expects.One.GetProperty(x => x.UTCNow).WillReturn(t1);
             using (FileStorageReaderAndWriter target = new FileStorageReaderAndWriter(GetTestDirectory(), timeSerivice.MockObject, 100))
             {
@@ -94,7 +94,7 @@ namespace FileStorage.Tests
             {
                 using (var target = new FileStorageReaderAndWriter(GetFileFromTime(t1)))
                 {
-                    Mock<IFileWritingIndex> new_index = mockFactory.CreateMock<IFileWritingIndex>();
+                    Mock<IFileStorageIndex> new_index = mockFactory.CreateMock<IFileStorageIndex>();
                     target.ScanFileAndFillIndex(new_index.MockObject);
                     mockFactory.VerifyAllExpectationsHaveBeenMet();
                 }
