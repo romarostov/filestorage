@@ -17,9 +17,25 @@ namespace FileStorageTestConsoleApp
 
         class DBConfig : IDirectoryStorageConfiguration
         {
+            /// <summary>
+            /// Максимальный размер одного файла 
+            /// </summary>
             public long MaximumMegabytesInFile { get; set; }
+
+            /// <summary>
+            /// Минимальный размер данных в записи
+            /// </summary>
             public long MinimumRecordDataSizeInBytes { get; set; }
+
+            /// <summary>
+            /// Максимальный размер данных в записи
+            /// </summary>
             public long MaximumRecordDataSizeInKilobytes { get; set; }
+
+            /// <summary>
+            /// Максимальный размер данных в ответе на запрос.
+            /// Защита от большого запроса
+            /// </summary>
             public long MaximumResultDataSizeInMegabytes { get; set; }
         }
         static void Main(string[] args)
@@ -31,32 +47,41 @@ namespace FileStorageTestConsoleApp
                 Directory.CreateDirectory(directory);
             }
 
-
+            //конфигурация базы данных
             DBConfig configuration = new DBConfig();
-            configuration.MinimumRecordDataSizeInBytes = 128;
-            configuration.MaximumRecordDataSizeInKilobytes = 1024;
+            //Максимальный размер одного файла 
             configuration.MaximumMegabytesInFile = 2048;
+
+            //Минимальный размер данных в записи
+            configuration.MinimumRecordDataSizeInBytes = 128;
+
+            // Максимальный размер данных в записи
+            configuration.MaximumRecordDataSizeInKilobytes = 1024;
+
+            //Максимальный размер данных в ответе на запрос. Защита от большого запроса
             configuration.MaximumResultDataSizeInMegabytes = 50;
 
             Console.WriteLine("Инициализация базы данных {0}", directory);
             Stopwatch sp = new Stopwatch();
             sp.Start();
-
             DirectoryStorage storage = new DirectoryStorage(directory, configuration, new FileStorageFactory(new TimeSerivice(), configuration));
             sp.Stop();
-            Console.WriteLine("Инициализация завершена {0}", sp.Elapsed);
-
             writeFiles(storage);
+            Console.WriteLine("Инициализация завершена {0}", sp.Elapsed);
 
             long isActive = 1;
 
+            //Генерация списка идентификаторов источников
             List<ushort> source_ids = new List<ushort>();
             for (ushort i = 1; i < 100; i++)
             {
                 source_ids.Add(i);
             }
-            List<byte> types_ids = new List<byte>() { 10, 20 };
+            //Генерация типов данных
+            List<byte> types_ids = new List<byte>() { 10, 20,30,40,50,60,70,80,90,100 };
 
+
+            //Поток для непрерывной записи данных
             Task.Factory.StartNew(() =>
             {
                 Random rnd = new Random();
@@ -110,7 +135,7 @@ namespace FileStorageTestConsoleApp
                 }
             });
 
-
+            //Поток для проведения тестовых запросов
             Task.Factory.StartNew(() =>
             {
                 Random rnd = new Random();
@@ -138,8 +163,6 @@ namespace FileStorageTestConsoleApp
 
                             Debug.Assert(start_time >= selected_file.SavedTimeRangeUTC.StartTime && start_time < selected_file.SavedTimeRangeUTC.FinishTime);
                             DateTime finishRange = start_time.AddSeconds(1);
-
-
 
 
                             //Console.WriteLine("Request duration{0}", finishRange - start_time);
@@ -201,14 +224,6 @@ namespace FileStorageTestConsoleApp
                                             record.Time, finishRange));
                                 }
 
-                                long size = BitConverter.ToInt64(record.Data, 0);
-                                if (size != record.Data.Length)
-                                {
-                                    throw new Exception(
-                                        String.Format(
-                                            "Error record data expected size[{0}] != record.Data.Length[{1}]", size,
-                                            record.Data.Length));
-                                }
                                 var time_binary = BitConverter.ToInt64(record.Data, record.Data.Length - 8);
                                 DateTime record_time = DateTime.FromBinary(time_binary);
                                 if (Math.Abs((record.Time - record_time).TotalMilliseconds) > 500)
@@ -219,6 +234,16 @@ namespace FileStorageTestConsoleApp
                                             record.Time, record_time,
                                             Math.Abs((record.Time - record_time).TotalMilliseconds)));
                                 }
+
+                                long size = BitConverter.ToInt64(record.Data, 0);
+                                if (size != record.Data.Length)
+                                {
+                                    throw new Exception(
+                                        String.Format(
+                                            "Error record data expected size[{0}] != record.Data.Length[{1}]", size,
+                                            record.Data.Length));
+                                }
+                                
                                 total_data_size += record.Data.Length;
                             }
 
@@ -245,7 +270,7 @@ namespace FileStorageTestConsoleApp
             writeFiles(storage);
 
             storage.Dispose();
-            Console.WriteLine("Stop test app");
+            Console.WriteLine("Stop test app! Press asy key");
             Console.Read();
         }
 

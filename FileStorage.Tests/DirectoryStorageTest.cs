@@ -159,8 +159,12 @@ namespace FileStorage.Tests
             fileStorageFactory.Expects.One.MethodWith(x => x.GetFileStorageReader(file2)).Will(Throw.Exception(new Exception("Error")));
 
             DateTime time1 = DateTime.UtcNow.AddHours(-1);
-            DateTime time2 = DateTime.UtcNow.AddSeconds(-10);
-            DateTime time3 = DateTime.UtcNow.AddSeconds(-1);
+            DateTime time1_2 = time1.AddSeconds(1);
+            DateTime time2 = time1_2.AddSeconds(1);
+            DateTime time2_2 = time2.AddSeconds(1);
+            DateTime time3 = time2_2.AddSeconds(1);
+            DateTime time3_2 = time3.AddSeconds(1);
+
             fileReader1.Expects.One.GetProperty(x => x.StartRange).WillReturn(time1);
 
             DirectoryStorage target = new DirectoryStorage(directory, config.MockObject, fileStorageFactory.MockObject);
@@ -183,7 +187,7 @@ namespace FileStorage.Tests
                 
                 {
 
-
+                    fileReader1.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time1_2);
                     fileReader1.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
                     Assert.AreEqual(0,target.GetData(time1.AddHours(-1), time1, null, null).Count);
                 }
@@ -263,16 +267,32 @@ namespace FileStorage.Tests
             mock_factory.VerifyAllExpectationsHaveBeenMet();
             mock_factory.ClearException();
 
-            Assert.AreEqual(0, target.GetData(time1.AddHours(-1), time1.AddSeconds(-1), null, null).Count);
-
             {
+                fileReader1.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time1_2);
+                file_reader2.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time2_2);
+                Assert.AreEqual(0, target.GetData(time1.AddHours(-1), time1.AddSeconds(-1), null, null).Count);
+            }
+
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
+            {
+
+                fileReader1.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time1_2);
+                file_reader2.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time2_2);
+                
                 fileReader1.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+
+
+
                 Assert.AreEqual(0, target.GetData(time1.AddHours(-1), time1, null, null).Count);
             }
             mock_factory.VerifyAllExpectationsHaveBeenMet();
             mock_factory.ClearException();
 
             {
+                fileReader1.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time1_2);
+                file_reader2.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time2_2);
+
                 fileReader1.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
                 file_reader2.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
                 Assert.AreEqual(0, target.GetData(time1.AddHours(-1), time2, null, null).Count);
@@ -282,6 +302,9 @@ namespace FileStorage.Tests
 
 
             {
+                fileReader1.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time1_2);
+                file_reader2.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time2_2);
+
                 fileReader1.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
                 file_reader2.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
                 Assert.AreEqual(0, target.GetData(time2.AddSeconds(-1), time2, null, null).Count);
@@ -291,7 +314,10 @@ namespace FileStorage.Tests
 
             
             {
-                fileReader1.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                fileReader1.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time1_2);
+                file_reader2.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time2_2);
+
+                
                 file_reader2.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
                 Assert.AreEqual(0, target.GetData(time2, time2, null, null).Count);
             }
@@ -299,8 +325,10 @@ namespace FileStorage.Tests
             mock_factory.ClearException();
 
             {
-                
-                Assert.AreEqual(0, target.GetData(time2.AddSeconds(1), time2.AddHours(1), null, null).Count);
+                fileReader1.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time1_2);
+                file_reader2.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time2_2);
+
+                Assert.AreEqual(0, target.GetData(time2.AddSeconds(2), time2.AddHours(1), null, null).Count);
             }
             mock_factory.VerifyAllExpectationsHaveBeenMet();
             mock_factory.ClearException();
@@ -339,6 +367,109 @@ namespace FileStorage.Tests
                 Assert.AreEqual(true, infos.Contains(info3));
             }
 
+
+            {
+                fileReader1.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time1_2);
+                file_reader2.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time2_2);
+                file_reader3.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time3_2);
+                //file_reader2.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                Assert.AreEqual(0, target.GetData(time1.AddSeconds(-10), time1.AddMilliseconds(-1), null, null).Count);
+            }
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
+
+
+            {
+                fileReader1.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time1_2);
+                file_reader2.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time2_2);
+                file_reader3.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time3_2);
+                
+                fileReader1.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                Assert.AreEqual(0, target.GetData(time1.AddSeconds(-10), time1, null, null).Count);
+            }
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
+
+
+            {
+                fileReader1.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time1_2);
+                file_reader2.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time2_2);
+                file_reader3.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time3_2);
+
+                fileReader1.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                file_reader2.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                Assert.AreEqual(0, target.GetData(time1.AddSeconds(-10), time2_2, null, null).Count);
+            }
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
+
+
+            {
+                fileReader1.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time1_2);
+                file_reader2.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time2_2);
+                file_reader3.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time3_2);
+
+                fileReader1.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                file_reader2.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                Assert.AreEqual(0, target.GetData(time1.AddSeconds(-10), time2_2, null, null).Count);
+            }
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
+
+
+            {
+                fileReader1.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time1_2);
+                file_reader2.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time2_2);
+                file_reader3.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time3_2);
+
+                fileReader1.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                file_reader2.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                file_reader3.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                Assert.AreEqual(0, target.GetData(time1, time3_2, null, null).Count);
+            }
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
+
+            {
+                fileReader1.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time1_2);
+                file_reader2.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time2_2);
+                file_reader3.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time3_2);
+
+                //fileReader1.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                file_reader2.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                file_reader3.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                Assert.AreEqual(0, target.GetData(time2_2, time3_2, null, null).Count);
+            }
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
+
+
+            {
+                fileReader1.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time1_2);
+                file_reader2.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time2_2);
+                file_reader3.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time3_2);
+
+                //fileReader1.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                //file_reader2.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                file_reader3.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                Assert.AreEqual(0, target.GetData(time3, time3_2, null, null).Count);
+            }
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
+
+
+            {
+                fileReader1.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time1_2);
+                file_reader2.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time2_2);
+                file_reader3.Stub.Out.GetProperty(x => x.FinishRange).WillReturn(time3_2);
+
+                //fileReader1.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                //file_reader2.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                //file_reader3.Expects.One.Method(x => x.ProcessSearchRequest(null)).WithAnyArguments();
+                Assert.AreEqual(0, target.GetData(time3_2.AddMilliseconds(1), time3_2.AddSeconds(1), null, null).Count);
+            }
+            mock_factory.VerifyAllExpectationsHaveBeenMet();
+            mock_factory.ClearException();
 
             fileReader1.Expects.One.MethodWith(x => x.Dispose());
             target.Dispose();

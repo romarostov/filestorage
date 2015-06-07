@@ -35,6 +35,7 @@ namespace FileStorage
                 _fileSize = fileStorageReaderAndWriter.FileSize;
                 if (File.Exists(_getIndexFileName())) //восстанавливаем информацию об индексе
                 {
+                    Console.WriteLine("Restore index for file[{0}]", fileStorageReaderAndWriter.FileName);
                     _rectoreIndex();
                 }
                 else //отсутвует файл с индексом, сканируем файл и восстанавливаем
@@ -248,7 +249,6 @@ namespace FileStorage
             
             lock (_syncObject)
             {
-
                 if (_records.Count > 0 && request.FinishSearchRange>=_startRange && request.StartSearchRange<=_finishRange)
                 {
                     bool filterBySourceIds = request.SearchSourceIds.Count > 0;
@@ -312,7 +312,10 @@ namespace FileStorage
 
         public bool WriteRecord(ushort sourceId, byte dataTypeId, byte[] data)
         {
-            return _fileStorageReaderAndWriter.WriteRecord(sourceId, dataTypeId, data, this);
+            lock (_syncObject)
+            {
+                return _fileStorageReaderAndWriter.WriteRecord(sourceId, dataTypeId, data, this);
+            }
         }
 
         protected override void OnDisposed()

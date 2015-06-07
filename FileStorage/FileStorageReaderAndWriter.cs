@@ -120,10 +120,7 @@ namespace FileStorage
                 throw new InvalidDataException(String.Format("record_potion[{0}] >=_fileStream.Length[{1}]", recordPotion, _fileStream.Length));
             }
 
-            if (_fileStream.Position != recordPotion)
-            {
-                _fileStream.Position = recordPotion;
-            }
+            _fileStream.Position = recordPotion;
             if (_fileStream.ReadByte() != Byte.MaxValue)
             {
                 throw new InvalidDataException(String.Format("In position [{0}] not started record", recordPotion));
@@ -212,6 +209,7 @@ namespace FileStorage
             if (_fileStream.Length != _fileStream.Position)
             {
                 _fileStream.Seek(0, SeekOrigin.End);
+                //_fileStream.Position = _fileStream.Length;
             }
 
             long current_file_position = _fileStream.Position;
