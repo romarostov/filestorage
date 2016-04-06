@@ -7,7 +7,7 @@ namespace Storage.Interfaces
 {
     
     /// <summary>
-    /// Запись в базе данных
+    /// Запись в базе данныхerew
     /// </summary>
     public class RecordDataItem
     {
