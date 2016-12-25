@@ -7,7 +7,7 @@ using Storage.Interfaces;
 namespace FileStorage
 {
     /// <summary>
-    /// Общая логика работы с хранилищем
+    ///sdfsdfdsfsd
     /// </summary>
     public class DirectoryStorage : DisposableObject, IDataItemStore
     {
