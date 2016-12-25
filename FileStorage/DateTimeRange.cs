@@ -3,7 +3,7 @@ using System;
 namespace FileStorage
 {
     /// <summary>
-    /// Временной диапазон
+    /// Test commit
     /// </summary>
     public class DateTimeRange
     {
